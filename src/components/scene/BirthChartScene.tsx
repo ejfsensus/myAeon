@@ -1,77 +1,213 @@
 "use client";
-
-import { Canvas, useFrame, useThree } from "@react-three/fiber";
-import { OrbitControls } from "@react-three/drei";
-import { useEffect, useRef, useState } from "react";
-import { CanvasTexture, DoubleSide, LinearFilter, SRGBColorSpace } from "three";
-import type { OrbitControls as OrbitControlsImpl } from "three-stdlib";
-import type { ThemeMode } from "@/components/ui/types";
-
-type Props = { svg: string; theme: ThemeMode; flat: boolean; reset: number; onReady?: () => void; onError?: () => void };
-
+import { useEffect, useState } from "react";
+import { Canvas, useThree } from "@react-three/fiber";
+import { OrbitControls, Html, Line } from "@react-three/drei";
+import type { ChartPoint, ChartAspect } from "@/lib/astrologyTypes";
+import ChartWheel from "../ui/ChartWheel";
+import { SceneBoundary, useScenePreferences } from "./SceneBoundary";
+type Props = {
+  points: ChartPoint[];
+  transits?: ChartPoint[];
+  houses: ChartPoint[];
+  aspects: ChartAspect[];
+  selected: string;
+  onSelect: (name: string) => void;
+  reset: number;
+};
+const vector = (
+  longitude: number,
+  radius: number,
+  asc: number,
+  z = 0,
+): [number, number, number] => {
+  const a = ((180 - longitude + asc) * Math.PI) / 180;
+  return [Math.cos(a) * radius, Math.sin(a) * radius, z];
+};
 export default function BirthChartScene(props: Props) {
-  return <Canvas orthographic camera={{ position: [0, 0, 10], zoom: 75, near: 0.1, far: 100 }} dpr={[1, 2]} gl={{ antialias: true, alpha: true }} aria-label="Calculated birth chart wheel" style={{ touchAction: "none" }}>
-    <ChartSurface {...props} />
-  </Canvas>;
+  const { supported, motion } = useScenePreferences();
+  const [lost, setLost] = useState(false);
+  const fallback = <ChartWheel {...props} tilt />;
+  if (!supported || lost) return fallback;
+  const asc = props.houses[0]?.longitude ?? 0;
+  return (
+    <SceneBoundary fallback={fallback}>
+      <Canvas
+        key={props.reset}
+        orthographic
+        camera={{ position: [0, -3.5, 10], zoom: 48 }}
+        frameloop="demand"
+        dpr={[1, 1.5]}
+        gl={{ alpha: true }}
+        onCreated={({ gl }) =>
+          gl.domElement.addEventListener(
+            "webglcontextlost",
+            () => setLost(true),
+            { once: true },
+          )
+        }
+        style={{ touchAction: "none" }}
+      >
+        <FitChart />
+        <ambientLight intensity={0.9} />
+        <directionalLight position={[0, 4, 8]} intensity={2} />
+        <group rotation={[0.12, 0, 0]}>
+          {[3.7, 4.3, 4.7].map((r) => (
+            <mesh key={r}>
+              <ringGeometry args={[r - 0.018, r + 0.018, 160]} />
+              <meshBasicMaterial color="#d4a437" transparent opacity={0.75} />
+            </mesh>
+          ))}
+          {Array.from({ length: 12 }, (_, i) => (
+            <group key={i}>
+              <Line
+                points={[vector(i * 30, 3.7, asc), vector(i * 30, 4.7, asc)]}
+                color="#d4a437"
+                transparent
+                opacity={0.45}
+              />
+              <Html
+                center
+                position={vector(i * 30 + 15, 4.45, asc)}
+                style={{
+                  pointerEvents: "none",
+                  color: "#d4a437",
+                  fontSize: 18,
+                }}
+              >
+                {
+                  [
+                    "♈",
+                    "♉",
+                    "♊",
+                    "♋",
+                    "♌",
+                    "♍",
+                    "♎",
+                    "♏",
+                    "♐",
+                    "♑",
+                    "♒",
+                    "♓",
+                  ][i]
+                }
+              </Html>
+            </group>
+          ))}
+          {props.houses.map((h) => (
+            <Line
+              key={h.name}
+              points={[
+                vector(h.longitude, 1, asc),
+                vector(h.longitude, 3.7, asc),
+              ]}
+              color="#7feaff"
+              transparent
+              opacity={0.3}
+            />
+          ))}
+          {props.aspects
+            .filter(
+              (a) =>
+                !props.selected ||
+                [a.first, a.second, a.natal, a.transit].includes(
+                  props.selected,
+                ),
+            )
+            .slice(0, 24)
+            .map((a, i) => {
+              const x = props.points.find(
+                  (p) => p.name === (a.first ?? a.natal),
+                ),
+                y = (a.transit ? props.transits : props.points)?.find(
+                  (p) => p.name === (a.second ?? a.transit),
+                );
+              return x && y ? (
+                <Line
+                  key={i}
+                  points={[
+                    vector(x.longitude, 3.1, asc, 0.1),
+                    vector(y.longitude, 3.1, asc, 0.1),
+                  ]}
+                  color={
+                    ["square", "opposition"].includes(a.aspect.toLowerCase())
+                      ? "#d79772"
+                      : "#69c6db"
+                  }
+                  transparent
+                  opacity={props.selected ? 0.8 : 0.2}
+                />
+              ) : null;
+            })}
+          {props.points.map((p, i) => {
+            const collisions = props.points
+              .slice(0, i)
+              .filter(
+                (q) =>
+                  Math.abs(((q.longitude - p.longitude + 540) % 360) - 180) < 8,
+              ).length;
+            const at = vector(
+              p.longitude,
+              3.1 - (collisions % 3) * 0.32,
+              asc,
+              0.2,
+            );
+            return (
+              <group key={p.name} position={at}>
+                <mesh
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    props.onSelect(p.name);
+                  }}
+                >
+                  <sphereGeometry
+                    args={[props.selected === p.name ? 0.14 : 0.09, 20, 20]}
+                  />
+                  <meshStandardMaterial
+                    color="#d4a437"
+                    emissive="#d4a437"
+                    emissiveIntensity={0.25}
+                  />
+                </mesh>
+                <Html center position={[0, 0.25, 0.15]}>
+                  <button
+                    className="chart-body-label"
+                    aria-pressed={props.selected === p.name}
+                    onClick={() => props.onSelect(p.name)}
+                  >
+                    {p.name.replaceAll("_", " ")}
+                  </button>
+                </Html>
+              </group>
+            );
+          })}
+          {props.transits?.map((p) => (
+            <mesh key={p.name} position={vector(p.longitude, 3.95, asc, 0.32)}>
+              <sphereGeometry args={[0.055, 12, 12]} />
+              <meshBasicMaterial color="#7feaff" />
+            </mesh>
+          ))}
+        </group>
+        <OrbitControls
+          enablePan={false}
+          enableDamping={motion}
+          minZoom={8}
+          maxZoom={110}
+          minPolarAngle={0.1}
+          maxPolarAngle={Math.PI * 0.65}
+        />
+      </Canvas>
+    </SceneBoundary>
+  );
 }
 
-function ChartSurface({ svg, theme, flat, reset, onReady, onError }: Props) {
-  const { gl, size, camera } = useThree();
-  const controls = useRef<OrbitControlsImpl>(null);
-  const [surface, setSurface] = useState<{ texture: CanvasTexture; ratio: number; svg: string } | null>(null);
-  const ready = useRef(false);
-  // Canvas readiness is independent of image loading, so the app cannot be held by an SVG.
-  useFrame(() => {
-    if (ready.current) return;
-    ready.current = true;
-    requestAnimationFrame(() => onReady?.());
-  });
-
+function FitChart() {
+  const { camera, size, invalidate } = useThree();
   useEffect(() => {
-    let active = true;
-    let texture: CanvasTexture | undefined;
-    const url = URL.createObjectURL(new Blob([svg], { type: "image/svg+xml" }));
-    const image = new Image();
-    image.onload = () => {
-      if (!active) return;
-      try {
-        const ratio = image.naturalWidth / image.naturalHeight || 1;
-        const renderedPixels = Math.max(size.width, size.height) * Math.min(gl.getPixelRatio(), 2) * 2;
-        const maxSize = Math.min(2048, gl.capabilities.maxTextureSize, Math.max(1024, 2 ** Math.ceil(Math.log2(renderedPixels))));
-        const canvas = document.createElement("canvas");
-        canvas.width = Math.round(ratio >= 1 ? maxSize : maxSize * ratio);
-        canvas.height = Math.round(ratio >= 1 ? maxSize / ratio : maxSize);
-        const context = canvas.getContext("2d");
-        if (!context) throw new Error("Canvas unavailable");
-        context.drawImage(image, 0, 0, canvas.width, canvas.height);
-        texture = new CanvasTexture(canvas);
-        texture.colorSpace = SRGBColorSpace;
-        texture.anisotropy = Math.min(8, gl.capabilities.getMaxAnisotropy());
-        texture.minFilter = LinearFilter;
-        setSurface({ texture, ratio, svg });
-      } catch { onError?.(); }
-    };
-    image.onerror = () => { if (active) onError?.(); };
-    // Server-generated SVG is isolated in an image, never inserted into the page DOM.
-    image.src = url;
-    return () => { active = false; image.onload = null; image.onerror = null; URL.revokeObjectURL(url); texture?.dispose(); };
-  }, [svg, theme, gl, size.width, size.height, onError]);
-
-  useEffect(() => {
-    controls.current?.reset();
-    camera.position.set(0, 0, 10);
-    camera.zoom = 75;
-    camera.updateProjectionMatrix();
-    controls.current?.update();
-  }, [camera, reset, flat, svg]);
-
-  const ratio = surface?.ratio ?? 1;
-  const width = Math.min(size.width / 75 * 0.96, size.height / 75 * 0.96 * ratio);
-  return <>
-    {surface?.svg === svg && <mesh rotation={flat ? [0, 0, 0] : [-0.28, 0.08, 0]}>
-      <planeGeometry args={[width, width / ratio]} />
-      <meshBasicMaterial map={surface.texture} side={DoubleSide} toneMapped={false} transparent />
-    </mesh>}
-    <OrbitControls ref={controls} enableRotate={!flat} enableZoom enablePan minZoom={40} maxZoom={400} enableDamping dampingFactor={0.08} />
-  </>;
+    if ("zoom" in camera) {
+      camera.zoom = Math.max(12, Math.min(size.width, size.height) / 11);
+      camera.updateProjectionMatrix();
+      invalidate();
+    }
+  }, [camera, size.width, size.height, invalidate]);
+  return null;
 }

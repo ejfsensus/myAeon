@@ -5,7 +5,7 @@ COPY --from=node-runtime /usr/local/lib/node_modules /usr/local/lib/node_modules
 RUN ln -s /usr/local/lib/node_modules/npm/bin/npm-cli.js /usr/local/bin/npm \
     && ln -s /usr/local/lib/node_modules/npm/bin/npx-cli.js /usr/local/bin/npx
 WORKDIR /app
-RUN apt-get update && apt-get install -y --no-install-recommends build-essential libstdc++6 ca-certificates tzdata \
+RUN apt-get update && apt-get install -y --no-install-recommends build-essential libstdc++6 ca-certificates tzdata ffmpeg \
     && rm -rf /var/lib/apt/lists/*
 COPY requirements.txt ./
 RUN pip install --no-cache-dir -r requirements.txt \

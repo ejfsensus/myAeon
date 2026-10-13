@@ -53,3 +53,11 @@ malformed JSON syntax before complete response validation.
 Node and Python dependencies retain their respective licenses. The JavaScript
 dependency tree is recorded in package-lock.json; Python dependencies are pinned
 in requirements.txt. No paid Astrologer API code or API credentials are bundled.
+
+## Experience assets
+
+- Zeus Dark and Zeus Light: supplied by the project owner for the myAeon interface; copied without alteration.
+- `public/audio/reading-ambience.m4a`: project-owner supplied ten-minute ambient recording, normalised for background playback. No rights ownership is inferred from its filename.
+- DejaVu Sans fonts: Bitstream Vera / DejaVu licences, included at `public/fonts/DEJAVU-LICENSE.txt`.
+- Procedural planet textures are authored by this project; they are illustrative, not photographic maps.
+- Place search uses Open-Meteo / GeoNames. Commercial deployments can configure the customer endpoint/key or a compatible self-hosted endpoint.

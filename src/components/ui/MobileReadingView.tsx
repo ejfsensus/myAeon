@@ -2,7 +2,7 @@
 import AstrologyStatus from "./AstrologyStatus";
 
 import { AnimatePresence, motion } from "framer-motion";
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { ArrowLeft, FileDown, Pencil, CircleHelp } from "lucide-react";
 import type { PlanetVisual, ZodiacSign } from "@/lib/zodiac";
 import type { PlanetInsight, ReadingPayload } from "./types";
@@ -58,6 +58,7 @@ export default function MobileReadingView({
   ...chartEnhancement
 }: Props) {
   const [tf, setTf] = useState<Timeframe>("Today");
+  useEffect(() => setTf("Today"), [reading]);
   const selectedInsight = selectedPlanet
     ? reading?.planetInsights?.find((insight) => insight.id === selectedPlanet.id) ?? null
     : null;
@@ -165,7 +166,7 @@ export default function MobileReadingView({
 
                 <div className="sticky top-[calc(env(safe-area-inset-top)+4.65rem)] z-[9] -mx-1 rounded-2xl bg-[var(--app-bg)]/90 p-1 backdrop-blur-xl">
                   <div className="grid grid-cols-4 rounded-2xl bg-black/30 p-1">
-                    {TIMEFRAMES.map((timeframe) => (
+                    {(reading?.mode === "today" ? ["Today"] as const : TIMEFRAMES).map((timeframe) => (
                       <button
                         key={timeframe}
                         type="button"

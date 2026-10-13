@@ -19,9 +19,12 @@ test('fresh geocentric sky includes Sun and Moon, excludes visual Earth', () => 
 });
 test('model, voice and prompt remain independent of written reading provider', () => {
   const settings = agentSettings({ viewedDate: '2026-10-09', reading: null });
-  assert.equal(settings.agent.think.provider.model, 'gpt-6-luna');
-  assert.equal(settings.agent.speak.provider.model, 'aura-2-hyperion-en');
-  assert.equal(settings.agent.think.provider.reasoning_mode, 'none');
+  assert.equal(settings.agent.think.provider.model, 'claude-sonnet-4-6');
+  assert.equal(settings.agent.speak.provider.model, 'flux-rufus-en');
+  assert.equal(settings.agent.think.provider.type, 'anthropic');
+  assert.equal(settings.agent.speak.provider.version, 'v2');
+  assert.equal(settings.agent.listen.provider.model, 'flux-general-en');
+  assert.equal(settings.agent.listen.provider.version, 'v2');
   assert.match(settings.agent.greeting, /Zeus/);
   assert.match(buildPrompt({ viewedDate: '2026-10-09' }), /You are Zeus/);
   assert.ok(!settings.agent.think.endpoint);
@@ -78,7 +81,7 @@ test('proxy gates audio, overrides settings, handles functions, updates context 
   const applied = once(client, 'message');
   assert.equal((await request({ token, context: { viewedDate: '2027-01-01' } })).status, 200);
   await applied;
-  assert.equal(messages[0].agent.think.provider.model, 'gpt-6-luna');
+  assert.equal(messages[0].agent.think.provider.model, 'claude-sonnet-4-6');
   assert.ok(!messages.includes('audio'));
   await new Promise(resolve => setTimeout(resolve, 20));
   assert.match(messages.find(m => m.type === 'UpdatePrompt').prompt, /2027-01-01/);
@@ -224,4 +227,27 @@ test('a conversation permits more than 24 sequential tool calls with no lifetime
   assert.equal(session.jobs.length, 1);
   assert.equal(session.client.readyState, WebSocket.OPEN);
   assert.ok(!session.clientMessages.some(message => message.type === 'Error'));
+});
+
+test('typed Zeus uses the configured provider, bounded history and no microphone audio', async t => {
+  const oldKey = process.env.DEEPGRAM_API_KEY;
+  process.env.DEEPGRAM_API_KEY = 'synthetic-test-key';
+  t.after(() => { if (oldKey === undefined) delete process.env.DEEPGRAM_API_KEY; else process.env.DEEPGRAM_API_KEY = oldKey; });
+  const upstream = new WebSocketServer({port:0}); await once(upstream,'listening');
+  const received=[];
+  upstream.on('connection', socket => socket.on('message',(data,binary)=>{
+    assert.equal(binary,false);
+    const message=JSON.parse(data); received.push(message);
+    if(message.type==='Settings')socket.send(JSON.stringify({type:'SettingsApplied'}));
+    if(message.type==='InjectUserMessage')socket.send(JSON.stringify({type:'ConversationText',role:'assistant',content:'Take one thoughtful step today.'}));
+  }));
+  const agent = createVoiceAgent({connect:()=>new WebSocket(`ws://127.0.0.1:${upstream.address().port}`)});
+  const server=createServer((req,res)=>agent.handle(req,res));server.listen(0,'127.0.0.1');await once(server,'listening');
+  t.after(()=>{server.close();for(const socket of upstream.clients)socket.terminate();upstream.close();});
+  const origin=`http://127.0.0.1:${server.address().port}`;
+  const result=await fetch(`${origin}/api/explore/session`,{method:'POST',headers:{Origin:origin,'Content-Type':'application/json'},body:JSON.stringify({context:{viewedDate:'2026-10-13'},message:'How can I start?',history:[{role:'You',text:'I want a calmer morning.'}]})});
+  assert.equal(result.status,200);assert.equal((await result.json()).reply,'Take one thoughtful step today.');
+  assert.equal(received[0].agent.think.provider.model,'claude-sonnet-4-6');
+  assert.match(received[0].agent.think.prompt,/calmer morning/);
+  assert.equal(received[1].content,'How can I start?');
 });

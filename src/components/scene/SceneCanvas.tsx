@@ -1,104 +1,157 @@
 "use client";
-
-import { Canvas } from "@react-three/fiber";
-import { useFrame } from "@react-three/fiber";
-import { OrbitControls } from "@react-three/drei";
-import { Suspense, useRef } from "react";
+import { Canvas, useFrame, useThree } from "@react-three/fiber";
+import { OrbitControls, PerformanceMonitor } from "@react-three/drei";
+import { Suspense, useEffect, useRef, useState } from "react";
+import { Vector3 } from "three";
+import type { OrbitControls as Controls } from "three-stdlib";
 import Starfield from "./Starfield";
 import Nebula from "./Nebula";
 import SolarSystem from "./SolarSystem";
-import type { CosmicSnapshot, PlanetVisual } from "@/lib/zodiac";
+import { SceneBoundary, useScenePreferences } from "./SceneBoundary";
+import { PLANETS, type CosmicSnapshot, type PlanetVisual } from "@/lib/zodiac";
 import type { ThemeMode } from "@/components/ui/types";
-
 type Props = {
   snapshot: CosmicSnapshot;
-  onPlanetHover: (planet: PlanetVisual | null) => void;
-  onPlanetClick: (planet: PlanetVisual) => void;
+  onPlanetHover: (p: PlanetVisual | null) => void;
+  onPlanetClick: (p: PlanetVisual) => void;
   flat?: boolean;
   selectedPlanetId?: PlanetVisual["id"] | null;
   theme: ThemeMode;
   onReady?: () => void;
+  enabled?: boolean;
+  reset?: number;
 };
-
-export default function SceneCanvas({
-  snapshot,
-  onPlanetHover,
-  onPlanetClick,
-  flat,
-  selectedPlanetId,
-  theme,
-  onReady,
-}: Props) {
-  const lightMode = theme === "light";
-  const sceneBg = lightMode ? "#eef6f9" : "#040414";
-  const fogNear = lightMode ? 48 : 50;
-  const fogFar = lightMode ? 132 : 140;
-
-  return (
-    <div className="fixed inset-0 z-0">
-      <Canvas
-        camera={{ position: [0, 18, 38], fov: 55 }}
-        dpr={[1, 2]}
-        gl={{ antialias: true, alpha: true }}
-        style={{ background: "transparent" }}
+export default function SceneCanvas(props: Props) {
+  const prefs = useScenePreferences();
+  const [dpr, setDpr] = useState(1.25);
+  const [lost, setLost] = useState(false);
+  const fallback = (
+    <div className="sky-fallback" aria-label="Two-dimensional solar overview">
+      <svg
+        viewBox="-40 -40 80 80"
+        role="img"
+        aria-label="Heliocentric planetary overview"
       >
-        <color attach="background" args={[sceneBg]} />
-        <fog attach="fog" args={[sceneBg, fogNear, fogFar]} />
-
-        {/* Soft fill so dark sides remain readable without flattening the scene */}
-        <ambientLight intensity={lightMode ? 0.64 : 0.34} color={lightMode ? "#cfe6ef" : "#4c5e86"} />
-        <hemisphereLight
-          args={[
-            lightMode ? "#ffffff" : "#9fdcff",
-            lightMode ? "#d5c5a0" : "#171126",
-            lightMode ? 0.54 : 0.36,
-          ]}
-        />
-        <directionalLight
-          position={[12, 16, 20]}
-          intensity={lightMode ? 0.72 : 0.55}
-          color={lightMode ? "#fff7e3" : "#d7eaff"}
-        />
-
-        <Suspense fallback={null}>
-          <Starfield theme={theme} />
-          <Nebula theme={theme} />
-          <SolarSystem
-            snapshot={snapshot}
-            onPlanetHover={onPlanetHover}
-            onPlanetClick={onPlanetClick}
-            flat={flat}
-            selectedPlanetId={selectedPlanetId}
-            theme={theme}
-          />
-        </Suspense>
-        <CanvasReady onReady={onReady} />
-
-        <OrbitControls
-          enablePan={false}
-          enableZoom
-          minDistance={20}
-          maxDistance={80}
-          enableDamping
-          dampingFactor={0.06}
-          rotateSpeed={0.5}
-          target={[0, 0, 0]}
-          minPolarAngle={Math.PI * 0.1}
-          maxPolarAngle={Math.PI * 0.85}
-        />
-      </Canvas>
+        <circle r="2" fill="#e8b852" />
+        {props.snapshot.planets.map((point) => {
+          const p = PLANETS.find((p) => p.id === point.id)!;
+          return (
+            <g key={p.id}>
+              <circle
+                r={p.orbitRadius}
+                fill="none"
+                stroke="#7feaff"
+                strokeOpacity=".16"
+                strokeWidth=".12"
+              />
+              <circle
+                cx={Math.cos(point.angleRad) * p.orbitRadius}
+                cy={Math.sin(point.angleRad) * p.orbitRadius}
+                r={Math.max(0.6, p.size)}
+                fill={p.color}
+              />
+            </g>
+          );
+        })}
+      </svg>
+      <p>Planetary overview · select a planet below</p>
     </div>
   );
+  if (!prefs.supported || lost) return fallback;
+  return (
+    <SceneBoundary fallback={fallback}>
+      <div className="scene-canvas">
+        <Canvas
+          camera={{ position: [0, 18, 38], fov: 55 }}
+          dpr={dpr}
+          frameloop={prefs.visible && prefs.motion ? "always" : "demand"}
+          gl={{ antialias: dpr > 1, alpha: true }}
+          onCreated={({ gl }) => {
+            gl.domElement.addEventListener(
+              "webglcontextlost",
+              () => setLost(true),
+              { once: true },
+            );
+            props.onReady?.();
+          }}
+          style={{ touchAction: props.enabled ? "none" : "pan-y" }}
+        >
+          <ambientLight intensity={props.theme === "light" ? 0.7 : 0.3} />
+          <hemisphereLight args={["#bfdfff", "#171126", 0.5]} />
+          <directionalLight
+            position={[12, 16, 20]}
+            intensity={1.3}
+            color="#fff4df"
+          />
+          <PerformanceMonitor
+            onDecline={() => setDpr(1)}
+            onIncline={() => setDpr(Math.min(devicePixelRatio, 1.5))}
+          />
+          <Suspense fallback={null}>
+            <Starfield theme={props.theme} />
+            <Nebula theme={props.theme} />
+            <SolarSystem {...props} flat={props.flat || !prefs.motion} />
+          </Suspense>
+          <CameraRig {...props} motion={prefs.motion} />
+        </Canvas>
+      </div>
+    </SceneBoundary>
+  );
 }
-
-function CanvasReady({ onReady }: { onReady?: () => void }) {
-  const calledRef = useRef(false);
-
-  useFrame(() => {
-    if (calledRef.current) return;
-    calledRef.current = true;
-    window.requestAnimationFrame(() => onReady?.());
+function CameraRig({
+  snapshot,
+  selectedPlanetId,
+  flat,
+  enabled,
+  reset,
+  motion,
+}: Props & { motion: boolean }) {
+  const controls = useRef<Controls>(null),
+    destination = useRef(new Vector3(0, 18, 38)),
+    target = useRef(new Vector3()),
+    moving = useRef(true);
+  const { camera, invalidate } = useThree();
+  useEffect(() => {
+    const planet = PLANETS.find((p) => p.id === selectedPlanetId),
+      point = snapshot.planets.find((p) => p.id === selectedPlanetId);
+    target.current.set(0, 0, 0);
+    destination.current.set(0, flat ? 44 : 18, flat ? 0.01 : 38);
+    if (planet && point) {
+      target.current.set(
+        Math.cos(point.angleRad) * planet.orbitRadius,
+        0,
+        Math.sin(point.angleRad) * planet.orbitRadius,
+      );
+      destination.current
+        .copy(target.current)
+        .add(new Vector3(0, flat ? 8 : 3.5, flat ? 0.01 : 7));
+    }
+    moving.current = true;
+    invalidate();
+  }, [snapshot, selectedPlanetId, flat, reset, invalidate]);
+  useFrame((_, delta) => {
+    if (!moving.current || !controls.current) return;
+    const step = motion ? 1 - Math.exp(-5 * delta) : 1;
+    camera.position.lerp(destination.current, step);
+    controls.current.target.lerp(target.current, step);
+    controls.current.update();
+    if (camera.position.distanceTo(destination.current) < 0.02)
+      moving.current = false;
+    else invalidate();
   });
-
-  return null;
+  return (
+    <OrbitControls
+      ref={controls}
+      enabled={enabled}
+      enableRotate={!flat}
+      enablePan={false}
+      minDistance={2.5}
+      maxDistance={85}
+      enableDamping={motion}
+      dampingFactor={0.08}
+      onStart={() => {
+        moving.current = false;
+      }}
+    />
+  );
 }

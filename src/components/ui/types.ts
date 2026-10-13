@@ -14,6 +14,7 @@ export type PlanetInsight = {
 };
 
 export type ReadingPayload = {
+  id?: string; version?: number; mode?: "today" | "full"; quality?: "complete" | "partial";
   sunSign: { id: string; name: string; symbol: string };
   greeting: string;
   summary: string;
@@ -28,6 +29,7 @@ export type ReadingPayload = {
   audioAuthorization?: AudioAuthorization;
   birthChart?: BirthChartInterpretation;
   meta?: {
+    timezone?: string; schemaVersion?: number;
     astrology?: import("@/lib/astrologyTypes").AstrologyMetadata;
     provider?: string;
     model?: string;

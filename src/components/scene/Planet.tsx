@@ -1,6 +1,7 @@
 "use client";
 
-import { useRef, useState } from "react";
+import { useRef, useState, useMemo, useEffect } from "react";
+import { planetTexture } from "./planetTexture";
 import * as THREE from "three";
 import { useFrame, useThree } from "@react-three/fiber";
 import { Html } from "@react-three/drei";
@@ -28,6 +29,8 @@ type LabelViewport = "visible" | "edge" | "offscreen";
  * system reads as a 2D map (used by the "Flat / 3D" toggle).
  */
 export default function Planet({ planet, angleRad, onHover, onClick, flat, selected, theme, label }: Props) {
+  const texture = useMemo(() => planetTexture(planet.id, planet.color), [planet.id, planet.color]);
+  useEffect(() => () => texture.dispose(), [texture]);
   const meshRef = useRef<THREE.Mesh>(null);
   const groupRef = useRef<THREE.Group>(null);
   const projectedRef = useRef(new THREE.Vector3());
@@ -112,9 +115,10 @@ export default function Planet({ planet, angleRad, onHover, onClick, flat, selec
       >
         <sphereGeometry args={[planet.size, 48, 48]} />
         <meshStandardMaterial
-          color={planet.color}
+          map={texture}
+          color="#ffffff"
           emissive={active ? planet.color : planet.emissive}
-          emissiveIntensity={selected ? 0.78 : hovered ? 0.62 : lightMode ? 0.42 : 0.34}
+          emissiveIntensity={selected ? 0.16 : 0.04}
           roughness={0.55}
           metalness={0.08}
           toneMapped={false}
@@ -164,10 +168,10 @@ export default function Planet({ planet, angleRad, onHover, onClick, flat, selec
 }
 
 function SaturnRing({ radius }: { radius: number }) {
-  const geometry = new THREE.RingGeometry(radius * 1.4, radius * 2.2, 64);
+
   return (
     <mesh rotation={[Math.PI / 2 - 0.4, 0, 0]}>
-      <primitive object={geometry} attach="geometry" />
+      <ringGeometry args={[radius * 1.4, radius * 2.2, 96]} />
       <meshBasicMaterial color="#e0c896" transparent opacity={0.55} side={THREE.DoubleSide} />
     </mesh>
   );

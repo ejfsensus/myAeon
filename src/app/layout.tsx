@@ -45,6 +45,7 @@ export const viewport: Viewport = {
   themeColor: "#050616",
   width: "device-width",
   initialScale: 1,
+  viewportFit: "cover",
 };
 
 export default function RootLayout({
@@ -55,7 +56,7 @@ export default function RootLayout({
   return (
     <html lang="en" className="dark">
       <body
-        className={`${geistSans.variable} ${geistMono.variable} antialiased bg-astral-deep text-white overflow-hidden`}
+        className={`${geistSans.variable} ${geistMono.variable} antialiased bg-astral-deep text-white`}
       >
         <div className="fallback-stars" aria-hidden />
         {children}

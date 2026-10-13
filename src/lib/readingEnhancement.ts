@@ -15,11 +15,12 @@ export const BirthChartSchema = z.object({
 
 // Accept the existing payload, but never forward client provenance or chart facts.
 export const PriorReadingSchema = z.object({
+  id: z.string().max(80).optional(), version: z.number().int().positive().optional(), mode: z.enum(["today", "full"]).optional(),
   sunSign: z.object({ id: z.string().max(80), name: z.string().max(80), symbol: z.string().max(8) }),
   greeting: z.string().max(400), summary: z.string().max(1600),
   sections: z.array(z.object({ title: z.string().max(120), timeframe: z.string().max(80), body: z.string().max(2400) })).max(16),
   planetInsights: z.array(z.object({
-    id: z.string().max(40), name: z.string().max(80), sign: z.string().max(80), degree: z.number().finite(),
+    id: z.enum(["mercury", "venus", "earth", "mars", "jupiter", "saturn", "uranus", "neptune"]), name: z.string().max(80), sign: z.string().max(80), degree: z.number().finite(),
     title: z.string().max(160), body: z.string().max(1600), reflection: z.string().max(500),
   })).max(8).optional(),
   affirmation: z.string().max(600),
@@ -29,7 +30,7 @@ export const PriorReadingSchema = z.object({
   }).optional(),
 });
 
-export const EnhancementInputSchema = z.object({ contextId: ContextIdSchema, reading: PriorReadingSchema.optional() }).strict();
+export const EnhancementInputSchema = z.object({ contextId: ContextIdSchema, reading: PriorReadingSchema.optional(), mode: z.enum(["today", "full"]).optional() }).strict();
 export const MAX_SEMANTIC_CONTEXT_CHARS = 32_000;
 
 const SectionSchema = z.object({
@@ -94,7 +95,7 @@ const responseText = { type: "string" };
 const RESPONSE_DOMAINS = ["Love & Connection", "Purpose & Work", "Body & Energy", "Inner World"] as const;
 const RESPONSE_HORIZONS = ["Today", "3 Days", "Week", "Month"] as const;
 const RESPONSE_CHART_TOPICS = ["Core Pattern", "Relationships and Direction", "Meeting the Current Sky"] as const;
-function responseObject(properties: Record<string, unknown>) {
+function responseObject<T extends Record<string, unknown>>(properties: T) {
   return { type: "object", properties, required: Object.keys(properties), additionalProperties: false };
 }
 
@@ -173,7 +174,7 @@ VERIFIED ASPECT STATEMENTS (the complete allowed named relationships, computed w
 Return the full compatible reading and explicit birthChart interpretation for context ${context.id}, sky date ${context.selectedDate}.`;
 }
 
-export function normalizeEnhancementOutput(raw: unknown) {
+export function normalizeEnhancementOutput(raw: unknown, mode: "today" | "full" = "full") {
   const object = (value: unknown): Record<string, unknown> | null => value && typeof value === "object" && !Array.isArray(value) ? value as Record<string, unknown> : null;
   const result = object(raw);
   if (!result) return null;
@@ -181,10 +182,10 @@ export function normalizeEnhancementOutput(raw: unknown) {
   const chart = object(result.birthChart), chartSections = object(chart?.sections);
   return {
     ...result,
-    sections: sections ? RESPONSE_HORIZONS.flatMap(timeframe => RESPONSE_DOMAINS.map(title => ({
+    sections: sections ? (mode === "today" ? ["Today"] : RESPONSE_HORIZONS).flatMap(timeframe => RESPONSE_DOMAINS.map(title => ({
       timeframe, title, body: object(sections[timeframe])?.[title],
     }))) : result.sections,
-    planetInsights: insights ? PLANETS.map(planet => ({ ...object(insights[planet.id]), id: planet.id })) : result.planetInsights,
+    planetInsights: insights ? PLANETS.filter(planet => mode !== "today" || ["mercury", "venus"].includes(planet.id)).map(planet => ({ ...object(insights[planet.id]), id: planet.id })) : result.planetInsights,
     birthChart: chart ? {
       ...chart,
       // Accept already-generated prose misplaced by a closing-brace error, not a substitute.
@@ -202,20 +203,43 @@ export function normalizeBirthChart(raw: unknown, context: AstrologyContext) {
   return parsed.data;
 }
 
-export function enhancementReadingInput(raw: unknown, prior?: z.infer<typeof PriorReadingSchema>) {
+export function enhancementReadingInput(raw: unknown, prior?: z.infer<typeof PriorReadingSchema>, mode: "today" | "full" = "full") {
   const parsed = ModelReadingSchema.safeParse(raw);
   if (!parsed.success) invalidEnhancement();
   const model = parsed.data;
   const sections = [...(model.sections ?? []), ...(prior?.sections ?? [])];
   const insights = [...(model.planetInsights ?? []), ...(prior?.planetInsights ?? [])];
   // Carry forward matching prior prose, but never invent template prose for an enhancement.
-  const complete = CompleteReadingSchema.safeParse({
+  const schema = mode === "today" ? CompleteReadingSchema.extend({
+    sections: SectionsSchema.refine(sections => sections.length === 4 && sections.every(s => s.timeframe === "Today")),
+    planetInsights: InsightsSchema.refine(insights => insights.length === 2),
+  }) : CompleteReadingSchema;
+  const complete = schema.safeParse({
     ...prior, ...model,
-    sections: ["Today", "3 Days", "Week", "Month"].flatMap(timeframe =>
+    sections: (mode === "today" ? ["Today"] : ["Today", "3 Days", "Week", "Month"]).flatMap(timeframe =>
       ["Love & Connection", "Purpose & Work", "Body & Energy", "Inner World"].map(title =>
         sections.find(section => section.title === title && section.timeframe === timeframe))),
-    planetInsights: PLANETS.map(planet => insights.find(insight => insight.id === planet.id)),
+    planetInsights: PLANETS.filter(planet => mode !== "today" || ["mercury", "venus"].includes(planet.id)).map(planet => insights.find(insight => insight.id === planet.id)),
   });
   if (!complete.success) invalidEnhancement();
   return complete.data;
 }
+
+/** An addendum never regenerates a previously accepted reading. */
+export const CHART_ADDENDUM_SCHEMA = responseObject({ birthChart: ENHANCEMENT_RESPONSE_SCHEMA.properties.birthChart });
+export const CHART_ADDENDUM_PROMPT = ENHANCEMENT_SYSTEM_PROMPT.slice(ENHANCEMENT_SYSTEM_PROMPT.indexOf("INTERPRETATION FRAMEWORK:")) + `
+Return one emit_chart_reading call containing only birthChart using the supplied schema. This is a concise chart addendum, not a replacement sky reading. Focus on the selected day. Keep each body under 65 words, overview and synthesis under 55 words, reflection one sentence. Include every required field. Do not return sky sections, planetInsights or audioScript.`;
+
+export const TODAY_ENHANCEMENT_SCHEMA = responseObject({
+  ...ENHANCEMENT_RESPONSE_SCHEMA.properties,
+  sections: responseObject({ Today: ENHANCEMENT_RESPONSE_SCHEMA.properties.sections.properties.Today }),
+  planetInsights: responseObject({
+    mercury: ENHANCEMENT_RESPONSE_SCHEMA.properties.planetInsights.properties.mercury,
+    venus: ENHANCEMENT_RESPONSE_SCHEMA.properties.planetInsights.properties.venus,
+  }),
+});
+export const TODAY_ENHANCEMENT_PROMPT = ENHANCEMENT_SYSTEM_PROMPT.replace(
+  "sections is an OBJECT with four required keys: Today, 3 Days, Week, Month.",
+  "sections is an OBJECT with only one required key: Today. Do not generate future horizons.",
+).replace("keyed by mercury, venus, earth, mars, jupiter, saturn, uranus, neptune", "keyed only by mercury and venus") +
+  " Keep the entire sky reading to 220–350 words. Chart section bodies under 65 words; overview and synthesis under 55 words each. Focus only on the selected day.";

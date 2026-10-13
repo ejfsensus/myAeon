@@ -5,7 +5,7 @@ import type { ReadingPayload } from "./types";
 
 type Piece = { buffer: AudioBuffer; offset: number };
 type Scheduled = { source: AudioBufferSourceNode; start: number; end: number; offset: number; seconds: number; rate: number };
-type Session = { context: AudioContext; socket: WebSocket; pieces: Piece[]; scheduled: Scheduled[];
+type Session = { music: HTMLAudioElement; musicGain: GainNode; voiceGain: GainNode; context: AudioContext; socket: WebSocket; pieces: Piece[]; scheduled: Scheduled[];
   duration: number; position: number; rate: number; complete: boolean; paused: boolean; timer?: ReturnType<typeof setInterval>;
   timeout?: ReturnType<typeof setTimeout> };
 
@@ -22,7 +22,7 @@ function position(session: Session) {
 function schedule(session: Session, piece: Piece, offset = 0) {
   const source = session.context.createBufferSource();
   source.buffer = piece.buffer; source.playbackRate.value = session.rate;
-  source.connect(session.context.destination);
+  source.connect(session.voiceGain);
   const last = session.scheduled[session.scheduled.length - 1];
   const start = Math.max(session.context.currentTime + 0.08, last?.end ?? 0);
   const seconds = piece.buffer.duration - offset;
@@ -34,6 +34,7 @@ function schedule(session: Session, piece: Piece, offset = 0) {
 function rebuild(session: Session, time: number) {
   for (const item of session.scheduled) { item.source.stop(); item.source.disconnect(); }
   session.scheduled = []; session.position = time;
+  session.music.currentTime = Math.min(599, time);
   for (const piece of session.pieces) {
     if (piece.offset + piece.buffer.duration > time) schedule(session, piece, Math.max(0, time - piece.offset));
   }
@@ -55,6 +56,7 @@ export function useReadingStream(reading: ReadingPayload | null) {
     ref.current = null;
     if (session) {
       clearInterval(session.timer); clearTimeout(session.timeout); session.socket.close();
+      session.music.pause(); session.music.removeAttribute("src"); session.music.load();
       void session.context.close();
     }
     setConnecting(false); setPlaying(false); setReady(false); setComplete(false);
@@ -72,10 +74,10 @@ export function useReadingStream(reading: ReadingPayload | null) {
       setError(null);
       if (!session.paused) {
         session.position = position(session); session.paused = true;
-        await session.context.suspend(); setPlaying(false);
+        session.music.pause(); await session.context.suspend(); setPlaying(false);
       } else {
         if (session.complete && session.position >= session.duration - 0.05) rebuild(session, 0);
-        await session.context.resume(); session.paused = false; setPlaying(true);
+        await session.context.resume(); void session.music.play().catch(() => {}); session.paused = false; setPlaying(true);
       }
       return;
     }
@@ -85,17 +87,25 @@ export function useReadingStream(reading: ReadingPayload | null) {
       // Resume inside the tap gesture so iOS can play later incoming frames.
       const context = new AudioContext();
       const resume = context.resume();
+      const voiceGain = context.createGain(); voiceGain.gain.value = 0.95; voiceGain.connect(context.destination);
+      const musicGain = context.createGain(); musicGain.gain.value = 0; musicGain.connect(context.destination);
+      const music = new Audio('/audio/reading-ambience.m4a'); music.preload = 'auto';
+      context.createMediaElementSource(music).connect(musicGain);
+      // Unlock from the user's Listen gesture, then align it to speech below.
+      const musicStarted = music.play();
+      musicStarted.catch(() => {});
       const url = new URL('/api/reading/audio/stream', window.location.href);
       url.protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
       const socket = new WebSocket(url);
       socket.binaryType = 'arraybuffer';
-      session = { context, socket, pieces: [], scheduled: [], duration: 0, position: 0, rate: 1, complete: false, paused: false };
+      session = { music, musicGain, voiceGain, context, socket, pieces: [], scheduled: [], duration: 0, position: 0, rate: 1, complete: false, paused: false };
       const current = session;
       ref.current = current;
       const fail = (message: string) => {
         if (ref.current !== current) return;
         stop(); setReady(false); setError(message);
       };
+      music.onerror = () => fail('The ambient recording could not load. Please retry listening.');
       const timeout = setTimeout(() => {
         if (!current.pieces.length) fail('Listening took too long to start. Try again or Generate Download.');
       }, 30000);
@@ -109,6 +119,7 @@ export function useReadingStream(reading: ReadingPayload | null) {
           const buffer = context.createBuffer(1, data.byteLength / 2, 24000);
           const samples = buffer.getChannelData(0);
           for (let i = 0; i < samples.length; i++) samples[i] = data.getInt16(i * 2, true) / 32768;
+          if (current.duration + buffer.duration > 600.01) { fail('This narration exceeded ten minutes. Please cast a shorter reading.'); return; }
           const piece = { buffer, offset: current.duration };
           current.pieces.push(piece); current.duration += buffer.duration;
           schedule(current, piece); clearTimeout(timeout);
@@ -130,9 +141,13 @@ export function useReadingStream(reading: ReadingPayload | null) {
       current.timer = setInterval(() => {
         if (ref.current !== current) { clearTimeout(timeout); return; }
         const time = position(current); setCurrentTime(time);
+        const audible = !current.paused && current.scheduled.some(item => context.currentTime >= item.start && context.currentTime < item.end);
+        current.musicGain.gain.setTargetAtTime(audible ? 0.35 : 0, context.currentTime, 0.18);
+        if (audible && current.music.paused) { current.music.currentTime = Math.min(599, time); void current.music.play().catch(() => fail('Tap Listen again to allow audio playback.')); }
+        if (!audible && !current.music.paused) current.music.pause();
         if (current.complete && time >= current.duration - 0.01 && !current.paused) {
           current.position = current.duration; current.paused = true;
-          void context.suspend(); setPlaying(false);
+          current.music.pause(); void context.suspend(); setPlaying(false);
         }
       }, 250);
       await resume;
@@ -150,7 +165,7 @@ export function useReadingStream(reading: ReadingPayload | null) {
   }, []);
   const changeRate = useCallback((value: number) => {
     const session = ref.current;
-    if (!session || ![0.75, 1, 1.25, 1.5, 2].includes(value)) return;
+    if (!session || ![1, 1.25, 1.5, 2].includes(value)) return;
     const time = position(session);
     session.rate = value; rebuild(session, time); setRate(value);
   }, []);

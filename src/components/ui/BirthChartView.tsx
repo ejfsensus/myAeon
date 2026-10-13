@@ -1,5 +1,6 @@
 "use client";
 
+import ChartWheel from "./ChartWheel";
 import dynamic from "next/dynamic";
 import { useCallback, useState } from "react";
 import { Download, LoaderCircle, RotateCcw, Sparkles, Pencil } from "lucide-react";
@@ -11,19 +12,20 @@ const BirthChartScene = dynamic(() => import("../scene/BirthChartScene"), { ssr:
 type Props = ChartEnhancementProps & {
   context: ChartContext | null; theme: ThemeMode; loading: boolean; error: string | null;
   timeConfidence: "known" | "estimated" | "unknown"; confirmed: boolean;
-  hasReading: boolean; enhanced: boolean; onCalculate: () => void; onEditDetails: () => void;
+  onExplain?: (name: string, frame: "natal" | "transit") => void; hasReading: boolean; enhanced: boolean; onCalculate: () => void; onEditDetails: () => void;
 };
 
-export default function BirthChartView({ context, theme, loading, error, timeConfidence, confirmed, hasReading, enhanced, onCalculate, onEditDetails, onEnhanceChart, enhancingChart, enhancementError }: Props) {
+export default function BirthChartView({ context, theme, loading, error, timeConfidence, confirmed, hasReading, enhanced, onCalculate, onEditDetails, onEnhanceChart, enhancingChart, enhancementError, onExplain }: Props) {
   const [mode, setMode] = useState<"natal" | "transit">("natal");
   const [flat, setFlat] = useState(true);
+  const [reference, setReference] = useState(false);
   const [reset, setReset] = useState(0);
   const [pointName, setPointName] = useState("");
   const [imageError, setImageError] = useState<string | null>(null);
   const onImageError = useCallback(() => setImageError("The chart image could not be displayed. You can still inspect its placements or download the original SVG."), []);
   const svg = timeConfidence === "known" ? context?.charts?.[mode]?.[theme] : undefined;
   const snapshot = context?.snapshots.find(item => item.date === context.selectedDate) ?? context?.snapshots[0];
-  const points = mode === "natal" ? [...(context?.natal?.planets ?? []), ...(context?.natal?.angles ?? [])] : snapshot?.planets ?? [];
+  const points = context?.natal ? [...(context?.natal?.planets ?? []), ...(context?.natal?.angles ?? [])] : snapshot?.planets ?? [];
   const point = points.find(item => item.name === pointName) ?? points[0];
   const available = Boolean(context?.natal && timeConfidence !== "unknown");
   const download = () => {
@@ -44,12 +46,12 @@ export default function BirthChartView({ context, theme, loading, error, timeCon
         <button type="button" aria-pressed={!flat} onClick={() => setFlat(false)}>Tilt</button>
         <button type="button" aria-pressed={flat} onClick={() => setFlat(true)}>Flat</button>
       </div>
-      <button type="button" className="chart-icon" title="Reset chart view" aria-label="Reset chart view" onClick={() => setReset(value => value + 1)}><RotateCcw size={17} /></button>
+      <button type="button" className="chart-icon" title="Reset chart view" aria-label="Reset chart view" onClick={() => { setReset(value => value + 1); setFlat(true); setPointName(""); }}><RotateCcw size={17} /></button>
       <button type="button" className="chart-icon" title="Download original SVG" aria-label="Download original SVG" disabled={!svg} onClick={download}><Download size={17} /></button>
     </div>
 
     <div className="chart-surface">
-      {svg && !imageError ? <BirthChartScene svg={svg} theme={theme} flat={flat} reset={reset} onError={onImageError} /> : <div className="chart-empty">
+      {points.length > 0 && !reference ? !flat ? <BirthChartScene reset={reset} points={mode === "transit" && context?.natal ? context.natal.planets : points} transits={mode === "transit" ? snapshot?.planets : undefined} houses={timeConfidence === "known" ? context?.natal?.houses ?? [] : []} aspects={mode === "transit" ? snapshot?.natalAspects ?? [] : context?.natal?.aspects ?? []} selected={pointName} onSelect={setPointName} /> : <ChartWheel points={mode === 'transit' && context?.natal ? context.natal.planets : points} transits={mode === 'transit' ? snapshot?.planets : undefined} houses={timeConfidence === 'known' ? context?.natal?.houses ?? [] : []} aspects={mode === 'transit' ? snapshot?.natalAspects ?? [] : context?.natal?.aspects ?? []} selected={pointName} onSelect={setPointName} tilt={!flat} /> : svg && !imageError ? <img className="chart-reference" src={`data:image/svg+xml;charset=utf-8,${encodeURIComponent(svg)}`} alt="Original calculated birth chart" onError={onImageError} /> : <div className="chart-empty">
         <h2 className="text-base font-medium">{loading ? "Calculating birth chart" : timeConfidence !== "known" ? "A recorded birth time is needed" : "Your birth chart"}</h2>
         <p className="mt-2 text-sm leading-6 opacity-75" role={error || imageError ? "alert" : "status"}>{loading ? "Your reading continues independently." : imageError || error || (timeConfidence !== "known" ? "A full wheel needs a known local birth time and exact birthplace. You can still cast a limited reading and explore the solar system." : !confirmed ? "Confirm your birth details to calculate a private chart." : context ? "No chart wheel was returned. Calculated placements remain available below." : "Calculate your chart, or cast a reading to load both views.")}</p>
         {!loading && <button type="button" onClick={timeConfidence !== "known" || !confirmed ? onEditDetails : onCalculate} className="mt-3 flex min-h-11 items-center justify-center gap-2 rounded-lg border border-[var(--panel-border)] px-3 text-sm"><Pencil size={16} />{timeConfidence !== "known" || !confirmed ? "Edit birth details" : "Calculate chart"}</button>}
@@ -57,6 +59,7 @@ export default function BirthChartView({ context, theme, loading, error, timeCon
     </div>
 
     <div className="chart-inspector">
+      {svg && <button className="chart-reference-toggle" onClick={() => setReference(v => !v)}>{reference ? 'Interactive chart' : 'Original wheel'}</button>}
       {point && <div className="mb-2">
         <div className="flex items-center justify-between gap-2">
           <label htmlFor="chart-placement" className="text-xs font-medium text-astral-cyan">{timeConfidence === "estimated" ? "Approximate facts" : "Private chart facts"}</label>
@@ -65,9 +68,11 @@ export default function BirthChartView({ context, theme, loading, error, timeCon
           </select>
         </div>
         <p className="mt-1 text-xs leading-5">{point.sign} {point.degree.toFixed(2)}°{point.house ? ` / ${chartHouseLabel(point.house)}` : ""}{point.retrograde ? " / Retrograde" : ""}</p>
-        <p className="text-[11px] leading-4 opacity-60">{mode === "natal" ? "Natal" : `Transits / ${context?.selectedDate}`} / Geocentric / {context?.confidence} time</p>
+        <p className="text-[11px] leading-4 opacity-60">{context?.natal ? "Natal placement" : `Current sky / ${context?.selectedDate}`} / Geocentric / {context?.confidence} time</p>
       </div>}
-      {timeConfidence === "estimated" && <p className="mb-2 text-xs leading-5 text-astral-gold">Estimated birth time: approximate placements and interpretation. No houses, angles or full wheel.</p>}
+      {mode === "transit" && point && snapshot?.planets.filter(p => p.name === point.name).map(p => <p key={p.name} className="text-xs leading-5 text-astral-cyan">Transiting {p.name}: {p.sign} {p.degree.toFixed(2)}° · {context?.selectedDate}</p>)}
+      {point && <><div className="aspect-list">{(mode === 'transit' ? snapshot?.natalAspects ?? [] : context?.natal?.aspects ?? []).filter(a => [a.first,a.second,a.natal,a.transit].includes(point.name)).slice(0,4).map((a,i) => <p key={i}>{a.first ?? a.natal} · {a.aspect} · {a.second ?? a.transit} <span>orb {a.orb.toFixed(2)}°</span></p>)}</div><button className="chart-explain" onClick={() => onExplain?.(point.name, mode)}>Explain {chartPointLabel(point.name)} with Zeus ↗</button></>}
+      {timeConfidence === "estimated" && <p className="mb-2 text-xs leading-5 text-astral-gold">Estimated birth time: approximate placements and interpretation. Houses and angles are omitted from this limited chart.</p>}
       {enhanced ? <p role="status" className="text-xs text-astral-cyan">Birth chart interpretation added to your reading.</p> : <button type="button" onClick={onEnhanceChart} disabled={!available || loading || enhancingChart || !onEnhanceChart} aria-busy={enhancingChart} className="flex min-h-11 w-full items-center justify-center gap-2 rounded-lg border border-[var(--panel-border)] px-2 py-2 text-xs font-medium disabled:opacity-50">
         {enhancingChart ? <LoaderCircle size={16} className="shrink-0 animate-spin motion-reduce:animate-none" /> : <Sparkles size={16} className="shrink-0" />}
         <span>{enhancingChart ? "Interpreting birth chart..." : hasReading ? "Enhance with my birth chart" : "Interpret birth chart"}</span>

@@ -1,3 +1,4 @@
+import { mixReadingAudio } from "../../../../../server/audio-mix.mjs";
 import { NextResponse } from "next/server";
 import { z } from "zod";
 import { MAX_AUDIO_SCRIPT_CHARS } from "@/lib/readingAudio";
@@ -42,10 +43,10 @@ export async function POST(req: Request) {
       return NextResponse.json({ error: "This listening request has expired or is invalid. Cast a new reading to listen." },
         { status: 403, headers: privateHeaders });
     }
-    const audio = await generateReadingAudio(parsed.data.script, config);
+    const audio = await mixReadingAudio(await generateReadingAudio(parsed.data.script, config));
     return new Response(new Uint8Array(audio), { headers: {
-      ...privateHeaders, "Content-Type": "audio/wav", "Content-Length": String(audio.length),
-      "Content-Disposition": 'inline; filename="myAeon-reading.wav"',
+      ...privateHeaders, "Content-Type": "audio/mp4", "Content-Length": String(audio.length),
+      "Content-Disposition": 'inline; filename="myAeon-reading.m4a"',
     } });
   } catch (error) {
     const timedOut = error instanceof Error && ["TimeoutError", "AbortError"].includes(error.name);

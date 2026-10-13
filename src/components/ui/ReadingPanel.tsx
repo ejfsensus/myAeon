@@ -2,7 +2,7 @@
 import AstrologyStatus from "./AstrologyStatus";
 
 import { motion, AnimatePresence } from "framer-motion";
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import type { PlanetVisual, ZodiacSign } from "@/lib/zodiac";
 import type { PlanetInsight, ReadingPayload } from "./types";
 import ReadingAudioPlayer from "./ReadingAudioPlayer";
@@ -22,7 +22,7 @@ type Props = ChartEnhancementProps & {
   selectedPlanet: PlanetVisual | null;
   selectedPlanetSign: ZodiacSign | null;
   selectedPlanetDegree: number | null;
-  onDownloadPdf?: () => void;
+  onDownloadPdf?: (includeCharts?: boolean) => void;
   onClearSelectedPlanet: () => void;
 };
 
@@ -54,7 +54,9 @@ export default function ReadingPanel({
   onClearSelectedPlanet,
   ...chartEnhancement
 }: Props) {
+  const [includeCharts, setIncludeCharts] = useState(false);
   const [tf, setTf] = useState<Timeframe>("Today");
+  useEffect(() => setTf("Today"), [reading]);
   const selectedInsight = selectedPlanet
     ? reading?.planetInsights?.find((insight) => insight.id === selectedPlanet.id) ?? null
     : null;
@@ -67,6 +69,8 @@ export default function ReadingPanel({
       className="reading-panel fixed top-20 right-4 bottom-24 z-20 w-96 max-w-[calc(100vw-2rem)] pointer-events-none max-md:top-auto max-md:left-3 max-md:right-3 max-md:bottom-[calc(env(safe-area-inset-bottom)+4.75rem)] max-md:w-auto max-md:max-w-none"
     >
       <div className="glass-strong h-full overflow-y-auto rounded-2xl p-5 pointer-events-auto scrollbar-hide max-md:max-h-[31svh] max-md:rounded-xl max-md:p-4">
+        {reading?.quality === "partial" && <p role="status" className="mb-4 rounded-lg border border-astral-gold/30 p-3 text-xs">Some generated sections were unavailable. General reflections fill those gaps; you can cast again for a fresh reading.</p>}
+        {reading?.meta?.readingDate && <p className="mb-3 text-xs opacity-60">{reading.mode === 'today' ? 'Daily reading' : 'Full reading'} · {reading.meta.readingDate} · noon London</p>}
         {/* Header */}
         <div className="flex items-start justify-between gap-3 mb-4">
           <div>
@@ -74,23 +78,24 @@ export default function ReadingPanel({
               Your Reading
             </p>
             <h2 className="text-lg font-light gold-text tracking-wide">
-              {sign?.name ?? "Cast a reading"}
+              {reading?.sunSign.name ?? sign?.name ?? "Cast a reading"}
             </h2>
           </div>
           <div className="flex items-center gap-2">
             {reading && onDownloadPdf && (
               <button
                 type="button"
-                onClick={onDownloadPdf}
+                onClick={() => onDownloadPdf(includeCharts)}
                 disabled={pdfLoading}
                 className="h-9 rounded-full border border-astral-gold/25 bg-astral-gold/10 px-3 text-[10px] font-semibold uppercase tracking-[0.16em] text-astral-gold transition hover:bg-astral-gold/15 disabled:cursor-wait disabled:opacity-60"
               >
                 {pdfLoading ? "Making" : "PDF"}
               </button>
             )}
+            {reading && <label className="flex items-center gap-1 text-[10px]"><input type="checkbox" checked={includeCharts} onChange={event => setIncludeCharts(event.target.checked)} />Chart appendix</label>}
             {sign && (
               <div className="text-3xl gold-text leading-none animate-glow rounded-full">
-                {sign.glyph}
+                {reading?.sunSign.symbol ?? sign.glyph}
               </div>
             )}
           </div>
@@ -161,7 +166,7 @@ export default function ReadingPanel({
 
             {/* Timeframe tabs */}
             <div className="flex gap-1 p-1 rounded-xl bg-black/30">
-              {TIMEFRAMES.map((t) => (
+              {(reading?.mode === "today" ? ["Today"] as const : TIMEFRAMES).map((t) => (
                 <button
                   key={t}
                   onClick={() => setTf(t)}

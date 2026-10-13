@@ -55,6 +55,7 @@ const engineSchema = z.object({ name: z.literal('Kerykeion'), version: z.literal
 const svgSchema = z.string().min(100).max(512_000).refine(value => /<svg\b/.test(value) && !/<(?:script|foreignObject)\b|\bon\w+\s*=|(?:href|src)\s*=\s*["'](?:https?:|\/\/|javascript:)/i.test(value), 'Unsafe chart SVG');
 const chartsSchema = z.object({ natal: z.object({ dark: svgSchema, light: svgSchema }).strict(), transit: z.object({ dark: svgSchema, light: svgSchema }).strict() }).strict();
 const readingSchema = z.object({
+  id: z.string().max(80).optional(), version: z.number().int().optional(), mode: z.enum(["today", "full"]).optional(),
   sunSign: z.object({ id: z.string().max(30), name: z.string().max(30), symbol: z.string().max(10) }),
   greeting: z.string().max(200), summary: z.string().max(1200), affirmation: z.string().max(500),
   sections: z.array(z.object({ title: z.string().max(100), timeframe: z.string().max(40), body: z.string().max(2000) })).max(16),

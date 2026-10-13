@@ -1,3 +1,4 @@
+import { getArtifact } from "../../../../../server/reading-artifacts.mjs";
 import fs from "node:fs";
 import path from "node:path";
 import PDFDocument from "pdfkit/js/pdfkit.standalone.js";
@@ -32,7 +33,9 @@ const PlanetInsightSchema = z.object({
 
 const PdfInputSchema = z.object({
   contextId: ContextIdSchema.optional(),
+  includeCharts: z.boolean().optional().default(true),
   reading: z.object({
+    id: z.string().max(80).optional(), version: z.number().int().positive().optional(), mode: z.enum(["today", "full"]).optional(),
     sunSign: z.object({
       id: z.string().max(80),
       name: z.string().max(80),
@@ -90,7 +93,7 @@ function sanitizeText(value: unknown) {
     .replace(/[\u201C\u201D]/g, '"')
     .replace(/[\u2013\u2014]/g, "-")
     .replace(/\u00b0/g, " deg")
-    .replace(/[^\x09\x0a\x0d\x20-\x7e]/g, "")
+    .replace(/[\u0000-\u0008\u000b\u000c\u000e-\u001f]/g, "")
     .trim();
 }
 
@@ -114,7 +117,7 @@ function drawPageBackground(doc: PDFKit.PDFDocument, pageNumber: number) {
     .stroke()
     .opacity(1);
 
-  doc.font("Helvetica").fontSize(8).fillColor(COLORS.muted);
+  doc.font("AeonSans").fontSize(8).fillColor(COLORS.muted);
   doc.text(`myAeon reading - page ${pageNumber}`, PAGE.marginX, PAGE.height - 30, {
     width: PAGE.width - PAGE.marginX * 2,
     align: "center",
@@ -130,11 +133,11 @@ function addHeader(doc: PDFKit.PDFDocument, reading: ReadingPdfInput, pageNumber
     const logo = fs.readFileSync(logoPath).toString("base64");
     doc.image(`data:image/png;base64,${logo}`, PAGE.marginX, 29, { width: 118 });
   } else {
-    doc.font("Helvetica-Bold").fontSize(18).fillColor(COLORS.gold).text("myAeon", PAGE.marginX, 36);
+    doc.font("AeonSans-Bold").fontSize(18).fillColor(COLORS.gold).text("myAeon", PAGE.marginX, 36);
   }
 
   doc
-    .font("Helvetica")
+    .font("AeonSans")
     .fontSize(8)
     .fillColor(COLORS.cyan)
     .text("COSMIC ASTROLOGICAL GUIDE", PAGE.width - 238, 41, {
@@ -144,7 +147,7 @@ function addHeader(doc: PDFKit.PDFDocument, reading: ReadingPdfInput, pageNumber
     });
 
   doc
-    .font("Helvetica-Bold")
+    .font("AeonSans-Bold")
     .fontSize(10)
     .fillColor(COLORS.ink)
     .text(sanitizeText(reading.sunSign.name), PAGE.width - 238, 56, {
@@ -175,7 +178,7 @@ function sectionLabel(doc: PDFKit.PDFDocument, label: string, x: number, y: numb
     .roundedRect(x, y, width, 18, 9)
     .fillAndStroke("#edf8fa", "#cce9ee");
   doc
-    .font("Helvetica-Bold")
+    .font("AeonSans-Bold")
     .fontSize(7)
     .fillColor(COLORS.cyan)
     .text(sanitizeText(label).toUpperCase(), x + 10, y + 5, {
@@ -195,18 +198,18 @@ function card(
   let remaining = sanitizeText(options.body), continued = false;
   do {
     const heading = title ? `${title}${continued ? " (continued)" : ""}` : "";
-    doc.font("Helvetica-Bold").fontSize(7.5);
+    doc.font("AeonSans-Bold").fontSize(7.5);
     const eyebrowHeight = eyebrow ? doc.heightOfString(eyebrow, { width: textWidth, characterSpacing: 0.8 }) + 6 : 0;
-    doc.font("Helvetica-Bold").fontSize(13);
+    doc.font("AeonSans-Bold").fontSize(13);
     const titleHeight = heading ? doc.heightOfString(heading, { width: textWidth }) + 6 : 0;
     const overhead = 28 + eyebrowHeight + titleHeight;
-    doc.font("Helvetica").fontSize(10.4);
-    const measure = (text: string) => doc.heightOfString(text, { width: textWidth, lineGap: 3 });
+    doc.font("AeonSans").fontSize(10.4);
+    const measure = (text: string) => doc.heightOfString(text, { width: textWidth, lineGap: 3, characterSpacing: 0 });
     const fullHeight = overhead + measure(remaining) + 12;
     if (fullHeight <= PAGE.height - PAGE.marginBottom - 98) ensureSpace(doc, reading, pageNumberRef, fullHeight);
     ensureSpace(doc, reading, pageNumberRef, overhead + 60 + 12);
     const available = PAGE.height - PAGE.marginBottom - doc.y - overhead - 12;
-    doc.font("Helvetica").fontSize(10.4);
+    doc.font("AeonSans").fontSize(10.4);
     let body = remaining;
     if (measure(body) > available) {
       // Find a fitting word boundary; PDFKit never gets an overflowing text box.
@@ -229,15 +232,15 @@ function card(
     doc.restore();
     let textY = y + 14;
     if (eyebrow) {
-      doc.font("Helvetica-Bold").fontSize(7.5).fillColor(options.accent === "cyan" ? COLORS.cyan : COLORS.goldDeep)
+      doc.font("AeonSans-Bold").fontSize(7.5).fillColor(options.accent === "cyan" ? COLORS.cyan : COLORS.goldDeep)
         .text(eyebrow, x + 18, textY, { width: textWidth, characterSpacing: 0.8 });
       textY += eyebrowHeight;
     }
     if (heading) {
-      doc.font("Helvetica-Bold").fontSize(13).fillColor(COLORS.ink).text(heading, x + 18, textY, { width: textWidth });
+      doc.font("AeonSans-Bold").fontSize(13).fillColor(COLORS.ink).text(heading, x + 18, textY, { width: textWidth, characterSpacing: 0 });
       textY += titleHeight;
     }
-    doc.font("Helvetica").fontSize(10.4).fillColor(COLORS.ink).text(body, x + 18, textY, { width: textWidth, lineGap: 3 });
+    doc.font("AeonSans").fontSize(10.4).fillColor(COLORS.ink).text(body, x + 18, textY, { width: textWidth, lineGap: 3, characterSpacing: 0 });
     doc.y = y + height + 12;
     if (remaining) { addPage(doc, reading, pageNumberRef); continued = true; }
   } while (remaining);
@@ -246,7 +249,7 @@ function card(
 function h2(doc: PDFKit.PDFDocument, reading: ReadingPdfInput, pageNumberRef: { value: number }, text: string) {
   ensureSpace(doc, reading, pageNumberRef, 42);
   doc.moveDown(0.2);
-  doc.font("Helvetica-Bold").fontSize(18).fillColor(COLORS.blue).text(sanitizeText(text), PAGE.marginX, doc.y, {
+  doc.font("AeonSans-Bold").fontSize(18).fillColor(COLORS.blue).text(sanitizeText(text), PAGE.marginX, doc.y, {
     width: PAGE.width - PAGE.marginX * 2,
   });
   doc
@@ -267,7 +270,7 @@ function renderChart(doc: PDFKit.PDFDocument, reading: ReadingPdfInput, pageNumb
   doc.save();
   SVGtoPDF(doc, svg, PAGE.marginX, y, {
     width, height, preserveAspectRatio: "xMidYMid meet",
-    fontCallback: (_family, bold, italic) => bold ? (italic ? "Helvetica-BoldOblique" : "Helvetica-Bold") : (italic ? "Helvetica-Oblique" : "Helvetica"),
+    fontCallback: (_family, bold, italic) => bold ? (italic ? "Helvetica-BoldOblique" : "AeonSans-Bold") : (italic ? "Helvetica-Oblique" : "AeonSans"),
     // No external files or nested documents are resolved during an export.
     imageCallback: () => { throw new Error("External chart image not allowed"); },
     documentCallback: () => { throw new Error("External chart document not allowed"); },
@@ -306,7 +309,7 @@ function appendBirthChart(doc: PDFKit.PDFDocument, reading: ReadingPdfInput, pag
   }
 }
 
-function renderReadingPdf(reading: ReadingPdfInput, provenance: string[], context?: AstrologyContext | null) {
+function renderReadingPdf(reading: ReadingPdfInput, provenance: string[], context?: AstrologyContext | null, includeCharts = true) {
   return new Promise<Buffer>((resolve, reject) => {
     const doc = new PDFDocument({
       size: "A4",
@@ -319,6 +322,8 @@ function renderReadingPdf(reading: ReadingPdfInput, provenance: string[], contex
       bufferPages: false,
     });
 
+    doc.registerFont("AeonSans", fs.readFileSync(path.join(process.cwd(), "public/fonts/DejaVuSans.ttf")));
+    doc.registerFont("AeonSans-Bold", fs.readFileSync(path.join(process.cwd(), "public/fonts/DejaVuSans-Bold.ttf")));
     const chunks: Buffer[] = [];
     const pageNumberRef = { value: 1 };
     doc.on("data", (chunk) => chunks.push(Buffer.from(chunk)));
@@ -327,13 +332,32 @@ function renderReadingPdf(reading: ReadingPdfInput, provenance: string[], contex
 
     addHeader(doc, reading, pageNumberRef.value);
     doc.y = 112;
+    if (reading.mode === "today") {
+      doc.font("AeonSans-Bold").fontSize(26).fillColor(COLORS.blue).text("Your Daily Reading", PAGE.marginX, doc.y, { width: PAGE.width - PAGE.marginX * 2, characterSpacing: 0 });
+      doc.moveDown(.3);
+      doc.font("AeonSans").fontSize(9).fillColor(COLORS.muted).text(`${reading.meta.readingDate ?? "Selected day"} · noon Europe/London · ${reading.sunSign.name}`, {characterSpacing:0});
+      doc.y += 20;
+      const blocks = [{title:reading.greeting,body:reading.summary}, ...reading.sections.map(s => ({title:s.title,body:s.body})), ...(reading.planetInsights ?? []).map(p => ({title:p.title,body:`${p.body} ${p.reflection}`})), {title:"Your reflection",body:reading.affirmation}];
+      if (reading.birthChart) blocks.push({title:reading.birthChart.title,body:reading.birthChart.overview}, ...reading.birthChart.sections, {title:"Bringing it together",body:reading.birthChart.synthesis}, {title:"A question to carry",body:reading.birthChart.reflection});
+      for(const block of blocks) {
+        doc.font("AeonSans").fontSize(10);
+        const height=doc.heightOfString(sanitizeText(block.body),{width:PAGE.width-PAGE.marginX*2,lineGap:3,characterSpacing:0})+38;
+        ensureSpace(doc,reading,pageNumberRef,height);
+        doc.font("AeonSans-Bold").fontSize(11).fillColor(COLORS.goldDeep).text(sanitizeText(block.title),PAGE.marginX,doc.y,{width:PAGE.width-PAGE.marginX*2,characterSpacing:0});
+        doc.y+=5;doc.font("AeonSans").fontSize(10).fillColor(COLORS.ink).text(sanitizeText(block.body),PAGE.marginX,doc.y,{width:PAGE.width-PAGE.marginX*2,lineGap:3,characterSpacing:0});doc.y+=16;
+      }
+      ensureSpace(doc,reading,pageNumberRef,55);
+      doc.font("AeonSans").fontSize(8).fillColor(COLORS.muted).text("A symbolic reflection, not a prediction. Calculated sky: geocentric and tropical. " + (context?.confidence === "estimated" ? "Birth-time-dependent facts are approximate. " : "") + (reading.id ? `Reading ${reading.id} · version ${reading.version}` : ""),PAGE.marginX,doc.y,{width:PAGE.width-PAGE.marginX*2,characterSpacing:0});
+      if (includeCharts && context?.natal) appendBirthChart(doc,reading,pageNumberRef,context);
+      doc.end();return;
+    }
 
-    doc.font("Helvetica-Bold").fontSize(30).fillColor(COLORS.blue).text("Your Cosmic Reading", PAGE.marginX, doc.y, {
+    doc.font("AeonSans-Bold").fontSize(30).fillColor(COLORS.blue).text("Your Cosmic Reading", PAGE.marginX, doc.y, {
       width: PAGE.width - PAGE.marginX * 2,
     });
     doc.moveDown(0.25);
     doc
-      .font("Helvetica")
+      .font("AeonSans")
       .fontSize(11)
       .fillColor(COLORS.muted)
       .text(
@@ -401,7 +425,11 @@ function renderReadingPdf(reading: ReadingPdfInput, provenance: string[], contex
       });
     }
 
-    if (context?.natal) appendBirthChart(doc, reading, pageNumberRef, context);
+    if (context?.natal && includeCharts) appendBirthChart(doc, reading, pageNumberRef, context);
+    else if (reading.birthChart) {
+      h2(doc, reading, pageNumberRef, reading.birthChart.title);
+      card(doc, reading, pageNumberRef, { body: [reading.birthChart.overview, ...reading.birthChart.sections.map(s => `${s.title}: ${s.body}`), reading.birthChart.synthesis, reading.birthChart.reflection].join("\n\n"), accent: "gold" });
+    }
 
     ensureSpace(doc, reading, pageNumberRef, 170);
     h2(doc, reading, pageNumberRef, "Reading Details");
@@ -432,13 +460,21 @@ export async function POST(req: Request) {
     const parsed = PdfInputSchema.parse(await readPrivateJson(req, 150_000));
     const { astrology } = await import("../../../../../server/astrology.mjs");
     const { requestIdentity } = await import("../../../../../server/astrology-quota.mjs");
-    const reading = parsed.reading;
-    const contextId = parsed.contextId ?? reading.meta.astrology?.contextId ?? reading.birthChart?.contextId;
+    let reading = parsed.reading;
+    let artifactContext: AstrologyContext | null = null;
+    if (reading.id && reading.version) {
+      const user = requestIdentity(req); cookie = user.cookie;
+      const artifact = getArtifact(user.id, reading.id, reading.version);
+      if (!artifact) throw new ReadingGenerationError("This saved reading has expired. Cast it again before exporting.", 409);
+      reading = PdfInputSchema.shape.reading.parse(artifact.reading);
+      artifactContext = artifact.context;
+    }
+    const contextId = artifactContext?.id ?? parsed.contextId ?? reading.meta.astrology?.contextId ?? reading.birthChart?.contextId;
     let context: AstrologyContext | null = null;
     let provenance = ["No retrievable server-owned birth chart. This export contains the sky reading only."];
     if (contextId) {
       const user = requestIdentity(req); cookie = user.cookie;
-      try { context = astrology.resolveContext(user.id, contextId); }
+      try { context = artifactContext ?? astrology.resolveContext(user.id, contextId); }
       catch { throw new ReadingGenerationError("Your chart context has expired. Prepare it again before exporting.", 409); }
       if (!context || !context.serverOwned || context.id !== contextId) throw new ReadingGenerationError("Your chart context could not be verified. Prepare it again before exporting.", 409);
       if ((reading.birthChart && reading.birthChart.contextId !== context.id)
@@ -446,14 +482,14 @@ export async function POST(req: Request) {
         || (reading.meta.readingDate && reading.meta.readingDate !== context.selectedDate)) {
         throw new ReadingGenerationError("This reading and chart do not match. Prepare the matching chart before exporting.", 409);
       }
-      const saved = context.natal ? astrology.getInterpretation(user.id, context.id) : null;
+      const saved = artifactContext ? reading : context.natal ? astrology.getInterpretation(user.id, context.id) : null;
       const interpretation = saved?.birthChart ? BirthChartSchema.parse(saved.birthChart) : undefined;
       if (reading.birthChart && (!interpretation || interpretation.contextId !== context.id)) {
         throw new ReadingGenerationError("The birth-chart interpretation could not be verified. Interpret the chart again before exporting.", 409);
       }
       reading.birthChart = interpretation;
       const profileId = context.profileId ?? reading.meta.profileId;
-      const profile = profileId ? astrology.resolveProfile(user.id, profileId) : null;
+      const profile = !artifactContext && profileId ? astrology.resolveProfile(user.id, profileId) : null;
       if (profile) {
         if ((reading.meta.birthDate && reading.meta.birthDate !== profile.birthDate)
           || (reading.meta.birthTime && reading.meta.birthTime !== profile.birthTime)) {
@@ -477,7 +513,7 @@ export async function POST(req: Request) {
         ...context.limitations,
       ];
     }
-    const pdf = await renderReadingPdf(reading, provenance, context);
+    const pdf = await renderReadingPdf(reading, provenance, context, parsed.includeCharts);
     const date = reading.meta.readingDate ?? new Date().toISOString().slice(0, 10);
     const filename = `${fileSafe(reading.sunSign.name)}-myAeon-reading-${fileSafe(date)}.pdf`;
     return new Response(new Uint8Array(pdf), { headers: {

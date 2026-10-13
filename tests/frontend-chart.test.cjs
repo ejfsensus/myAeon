@@ -14,7 +14,7 @@ for (const extension of ['.ts', '.tsx']) require.extensions[extension] = (module
 };
 
 const load = Module._load;
-const mocked = new Set(['AppHeader', 'ControlPanel', 'ReadingPanel', 'PlanetTooltip', 'PlanetInfoBar', 'HowItWorksModal', 'AeonPreloader', 'QuickTour', 'MobileBottomActions', 'MobileReadingDrawer', 'MobileReadingView', 'SceneViewControls', 'BirthChartView']);
+const mocked = new Set(['WelcomeScreen', 'Modal', 'AppHeader', 'ControlPanel', 'ReadingPanel', 'PlanetTooltip', 'PlanetInfoBar', 'HowItWorksModal', 'AeonPreloader', 'QuickTour', 'MobileBottomActions', 'MobileReadingDrawer', 'MobileReadingView', 'SceneViewControls', 'BirthChartView']);
 const audioInputs = [];
 const audio = { stream: { stop() {} }, pause() {} };
 Module._load = function(request, parent, isMain) {
@@ -22,12 +22,13 @@ Module._load = function(request, parent, isMain) {
   if (request === '@/components/ui/useReadingAudio') return { useReadingAudio: reading => { audioInputs.push(reading); return audio; } };
   if (request.startsWith('@/')) {
     const name = request.split('/').at(-1);
-    if (mocked.has(name)) return { __esModule: true, default: props => React.createElement(`mock-${name}`, props) };
+    if (name === 'BirthDetailsForm') return { ...load.call(this, path.resolve(__dirname, '../src', request.slice(2)), parent, isMain), __esModule:true, default: props => React.createElement('mock-BirthDetailsForm', props) };
+    if (mocked.has(name)) return { __esModule: true, default: props => React.createElement(`mock-${name}`, props, props.children) };
     request = path.resolve(__dirname, '../src', request.slice(2));
   }
   return load.call(this, request, parent, isMain);
 };
-const Home = require('../src/app/page.tsx').default;
+const Home = require('../src/app/Home.tsx').default;
 const { initialBirthInput } = require('../src/components/ui/BirthDetailsForm.tsx');
 const Enhancement = require('../src/components/ui/BirthChartReading.tsx').default;
 const ChartView = require('../src/components/ui/BirthChartView.tsx').default;
@@ -37,12 +38,12 @@ Module._load = load;
 
 const response = (body, ok = true) => ({ ok, json: async () => body });
 const context = { id: 'c'.repeat(48), profileId: 'p'.repeat(48), natal: { planets: [] }, snapshots: [], confidence: 'known', selectedDate: '2026-10-10' };
-const reading = { sunSign: { id: 'taurus', name: 'Taurus', symbol: 'T' }, greeting: 'Hello', summary: 'Baseline', sections: [], affirmation: 'Reflect' };
+const reading = { sunSign: { id: 'taurus', name: 'Taurus', symbol: 'T' }, greeting: 'Hello', summary: 'Baseline', meta: {readingDate:'2026-10-10'}, sections: [], affirmation: 'Reflect' };
 const enhanced = { ...reading, birthChart: { contextId: context.id, title: 'Birth chart', overview: 'Overview', sections: [{ title: 'Pattern', body: 'Calculated pattern' }], synthesis: 'Synthesis', reflection: 'Reflection' } };
 
 function harness() {
   global.window = { localStorage: { getItem: () => 'seen', setItem() {} }, matchMedia: () => ({ matches: false, addEventListener() {}, removeEventListener() {} }) };
-  global.document = { documentElement: { dataset: {} }, body: { dataset: {} }, querySelector: () => null };
+  global.document = { documentElement: { dataset: {}, style: { setProperty() {} } }, body: { dataset: {} }, querySelector: () => null };
   const requests = [];
   global.fetch = (url, options) => {
     if (!options?.method) return Promise.resolve(response({ enabled: true, usage: null }));
@@ -52,11 +53,19 @@ function harness() {
     return pending;
   };
   let tree;
-  act(() => { tree = create(React.createElement(Home)); });
-  const props = name => tree.root.findByType(`mock-${name}`).props;
+  act(() => { tree = create(React.createElement(Home, { initialDate:'2026-10-10' })); });
+  const nav = label => act(() => tree.root.findAllByType('nav')[0].findAllByType('button').find(b => b.children.includes(label)).props.onClick());
+  const props = name => {
+    if(name === 'ControlPanel') { name='BirthDetailsForm'; if(!tree.root.findAllByType('mock-BirthDetailsForm').length) act(()=>tree.root.findAllByType('button').find(b=>b.children.includes('Birth details ')).props.onClick()); }
+    if(name==='ReadingPanel'&&!tree.root.findAllByType('mock-ReadingPanel').length) nav('Reading');
+    if(name==='BirthChartView'&&!tree.root.findAllByType('mock-BirthChartView').length) nav('Birth chart');
+    if(name==='SceneViewControls') return {onChange:()=>nav('Birth chart')};
+    return tree.root.findByType(`mock-${name}`).props;
+  };
+  act(()=>props('WelcomeScreen').onStart('today'));
   const input = { ...initialBirthInput(), birthDate: '1990-05-01', birthTime: '10:15', timeConfidence: 'known', confirmed: true, readingDate: '2026-10-10' };
   act(() => props('ControlPanel').onChange(input));
-  const submit = () => { act(() => { void props('ControlPanel').onSubmit(input, { name: 'Taurus', glyph: 'T' }); }); };
+  const submit = () => { const form = props('ControlPanel'); act(() => { void form.onSubmit(input, { name: 'Taurus', glyph: 'T' }); }); };
   const resolve = async (url, body, ok = true) => {
     const request = requests.findLast(item => item.url === url);
     await act(async () => { request.resolve(response(body, ok)); await Promise.resolve(); });
@@ -92,7 +101,7 @@ test('enhancement is explicit, uses the computed context, replaces payload, and 
     await h.resolve('/api/astrology/chart', { context });
     await h.resolve('/api/reading', reading);
     assert.equal(h.requests.some(item => item.url === '/api/reading/enhance'), false);
-    act(() => h.props('ReadingPanel').onEnhanceChart());
+    const enhanceAction = h.props('ReadingPanel').onEnhanceChart; act(() => { void enhanceAction(); });
     const request = h.requests.at(-1);
     assert.equal(request.url, '/api/reading/enhance');
     assert.equal(request.body.contextId, context.id);
@@ -133,8 +142,8 @@ test('chart-only calculation makes no reading request; interpretation omits the 
     await h.resolve('/api/astrology/profile', { profileId: context.profileId });
     await h.resolve('/api/astrology/chart', { context });
     assert.equal(h.requests.some(item => item.url === '/api/reading' || item.url === '/api/reading/enhance'), false);
-    act(() => h.props('BirthChartView').onEnhanceChart());
-    assert.deepEqual(h.requests.at(-1).body, { contextId: context.id });
+    const chartAction = h.props('BirthChartView').onEnhanceChart; act(() => { void chartAction(); });
+    assert.deepEqual(h.requests.at(-1).body, { contextId: context.id, mode: 'today' });
     await h.resolve('/api/reading/enhance', enhanced);
     assert.equal(h.props('ReadingPanel').reading.birthChart.contextId, context.id);
     const voice = h.tree.root.findAllByType('dynamic-ui').find(item => 'profileId' in item.props);
@@ -166,9 +175,9 @@ test('estimated natal facts permit explicit interpretation, with approximation w
     act(() => h.props('BirthChartView').onCalculate());
     await h.resolve('/api/astrology/profile', { profileId: context.profileId });
     await h.resolve('/api/astrology/chart', { context: { ...context, confidence: 'estimated', charts: undefined } });
-    assert.equal(h.props('ReadingPanel').chartAvailable, true);
+    assert.equal(h.props('BirthChartView').timeConfidence, 'estimated');
     assert.equal(h.props('ReadingPanel').chartConfidence, 'estimated');
-    act(() => h.props('BirthChartView').onEnhanceChart());
+    const chartAction = h.props('BirthChartView').onEnhanceChart; act(() => { void chartAction(); });
     assert.equal(h.requests.at(-1).url, '/api/reading/enhance');
     await h.resolve('/api/reading/enhance', enhanced);
     let tree;

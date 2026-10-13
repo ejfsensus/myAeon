@@ -10,7 +10,7 @@ insights with their reflections, any explicit birthChart overview, sections, syn
 and reflection, and the closing affirmation. Preserve the written
 reading's meaning and practical advice; do not add facts, predictions, natal details,
 or new claims. Keep the same symbolic, non-deterministic framing.
-Aim for 900 to 1200 words, and stay below 20000 characters. Use calm, warm, natural
+Aim for 700 to 900 words, and stay below 20000 characters. Use calm, warm, natural
 conversational English, second-person address, short sentences, and brief paragraphs.
 Use spoken transitions so listeners always know the timeframe and topic without
 seeing the screen. Do not say “click”, “tab”, “as shown above”, or refer to the interface.
@@ -47,7 +47,7 @@ export function cleanSpeechText(text: string): string {
 
 /** Graceful compatibility if the model omits or malforms the requested script. */
 export function resolveAudioScript(raw: unknown, reading: {
-  greeting: string; summary: string; affirmation: string;
+  mode?: "today" | "full"; greeting: string; summary: string; affirmation: string;
   sections: Array<{ timeframe: string; title: string; body: string }>;
   planetInsights: Array<{ title: string; body: string; reflection: string }>;
   birthChart?: { title: string; overview: string; sections: Array<{ title: string; body: string }>; synthesis: string; reflection: string };
@@ -55,7 +55,7 @@ export function resolveAudioScript(raw: unknown, reading: {
   // Rebuild enhanced speech from the written payload so an omitted chart is never signed.
   if (!reading.birthChart && typeof raw === "string") {
     const cleaned = cleanSpeechText(raw);
-    if (cleaned.length >= 80 && cleaned.length <= MAX_AUDIO_SCRIPT_CHARS) return cleaned;
+    if (cleaned.length >= 80 && cleaned.length <= MAX_AUDIO_SCRIPT_CHARS && cleaned.split(/\s+/).length <= 1000) return cleaned;
   }
   const horizons: Record<string, string> = {
     Today: "For today", "3 Days": "Over the next three days",
@@ -64,6 +64,7 @@ export function resolveAudioScript(raw: unknown, reading: {
   const paragraphs = [reading.greeting, reading.summary,
     "This is a symbolic reflection, rather than a prediction."];
   for (const [timeframe, transition] of Object.entries(horizons)) {
+    if (!reading.sections.some(s => s.timeframe === timeframe)) continue;
     paragraphs.push(`${transition}.`);
     for (const section of reading.sections.filter((s) => s.timeframe === timeframe)) {
       paragraphs.push(`Turning to ${section.title.toLowerCase()}. ${section.body}`);
@@ -82,7 +83,20 @@ export function resolveAudioScript(raw: unknown, reading: {
   }
   paragraphs.push(`To close, your affirmation. ${reading.affirmation}`);
   // Never truncate in the middle of a spoken sentence.
-  const cleaned = cleanSpeechText(paragraphs.join("\n\n"));
+  const wordBudget = reading.mode === "today" ? 500 : 1000;
+  const original = cleanSpeechText(paragraphs.join("\n\n"));
+  if (original.split(/\s+/).length <= wordBudget && original.length <= MAX_AUDIO_SCRIPT_CHARS) return original;
+  const perTopic = Math.max(12, Math.floor(wordBudget / paragraphs.length));
+  const spoken = paragraphs.map(paragraph => {
+    const sentences = cleanSpeechText(paragraph).match(/[^.!?]+[.!?]+|[^.!?]+$/g) || [];
+    let words = 0;
+    return sentences.filter((sentence, index) => {
+      const count = sentence.trim().split(/\s+/).length;
+      if (words + count > perTopic && index > 0) return false;
+      words += count; return true;
+    }).join(" ").trim();
+  });
+  const cleaned = cleanSpeechText(spoken.join("\n\n"));
   if (cleaned.length <= MAX_AUDIO_SCRIPT_CHARS) return cleaned;
   if (reading.birthChart) {
     // Allocate across every topic, including the chart, instead of dropping the tail.

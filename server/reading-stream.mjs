@@ -1,3 +1,4 @@
+import { masterKey, getMaster, pendingMaster, beginMaster, finishMaster } from './audio-master.mjs';
 import { createHmac, timingSafeEqual } from 'node:crypto';
 import WebSocket, { WebSocketServer } from 'ws';
 
@@ -54,7 +55,7 @@ export function attachReadingStream(server, otherUpgrade = () => {}, options = {
     let upstream;
     let nextTimer;
     let progressTimer;
-    let complete = false;
+    let complete = false; let sharedKey; let ownsJob = false; const recording = [];
     const send = message => { if (client.readyState === WebSocket.OPEN) client.send(JSON.stringify(message)); };
     const fail = message => { send({ type: 'error', message }); client.close(1011, 'Streaming stopped'); };
     const authTimer = setTimeout(() => fail('Listening request expired. Please try again.'), 10000);
@@ -63,8 +64,9 @@ export function attachReadingStream(server, otherUpgrade = () => {}, options = {
     client.once('close', () => {
       active--; clearTimeout(authTimer); clearTimeout(lifetime); clearTimeout(nextTimer); clearTimeout(progressTimer);
       upstream?.terminate();
+      if (ownsJob && !complete) finishMaster(sharedKey, undefined, new Error('Listening interrupted.'));
     });
-    client.once('message', (data, binary) => {
+    client.once('message', async (data, binary) => {
       clearTimeout(authTimer);
       let request;
       try { if (binary) throw new Error(); request = JSON.parse(data.toString()); } catch {
@@ -78,6 +80,20 @@ export function attachReadingStream(server, otherUpgrade = () => {}, options = {
       const model = /^aura-(?:2-)?[a-z]+-[a-z]{2}$/.test(modelSetting) ? modelSetting
         : /^aura-(?:2-)?[a-z]+-[a-z]{2}$/.test(voice) ? voice : `${modelSetting}-${voice}`;
       if (!/^aura-(?:2-)?[a-z]+-[a-z]{2}$/.test(model)) { fail('Invalid voice configuration.'); return; }
+      sharedKey = masterKey(request.script, model, key);
+      const replay = async pcm => {
+        if (client.readyState !== WebSocket.OPEN) return;
+        send({ type: 'ready', sampleRate: 24000 });
+        for (let offset = 0; offset < pcm.length; offset += 48000) {
+          if (client.readyState !== WebSocket.OPEN) return;
+          await new Promise(resolve => client.send(pcm.subarray(offset, offset + 48000), { binary: true }, resolve));
+        }
+        complete = true; send({ type: 'complete' }); client.close(1000, 'Complete');
+      };
+      const cached = getMaster(sharedKey); if (cached) { await replay(cached); return; }
+      const pending = pendingMaster(sharedKey);
+      if (pending) { try { await replay(await pending); } catch { fail('Recording was interrupted. Please retry.'); } return; }
+      ownsJob = beginMaster(sharedKey);
       const chunks = streamChunks(request.script);
       let index = 0;
       let bytes = 0;
@@ -89,6 +105,7 @@ export function attachReadingStream(server, otherUpgrade = () => {}, options = {
         if (client.readyState !== WebSocket.OPEN || upstream.readyState !== WebSocket.OPEN) return;
         if (index === chunks.length) {
           if (!bytes) { fail('The voice service returned empty audio.'); return; }
+          finishMaster(sharedKey, Buffer.concat(recording));
           complete = true; send({ type: 'complete' }); upstream.send(JSON.stringify({ type: 'Close' }));
           client.close(1000, 'Complete'); return;
         }
@@ -108,9 +125,10 @@ export function attachReadingStream(server, otherUpgrade = () => {}, options = {
       upstream.on('message', (data, binary) => {
         if (binary) {
           bytes += data.length;
-          if (bytes > 32 * 1024 * 1024 || client.bufferedAmount > 2 * 1024 * 1024) {
+          if (bytes > 600 * 24000 * 2 || client.bufferedAmount > 2 * 1024 * 1024) {
             fail('Recording is too large or the connection is too slow. Try Generate Download.'); return;
           }
+          recording.push(Buffer.from(data));
           if (client.readyState === WebSocket.OPEN) client.send(data, { binary: true });
           return;
         }

@@ -112,7 +112,8 @@ function pdfContents(bytes) {
     if (/\/Filter\s*\/FlateDecode\b/.test(dictionary)) streams.push(zlib.inflateSync(payload).toString('latin1'));
     else if (!/\/Filter\b/.test(dictionary)) streams.push(payload.toString('latin1'));
   }
-  const streamTexts = streams.map(stream => [...stream.matchAll(/<([a-f\d]+)>/gi)].map(match => Buffer.from(match[1], 'hex').toString('latin1')).join(''));
+  let streamTexts = streams.map(stream => [...stream.matchAll(/<([a-f\d]+)>/gi)].map(match => Buffer.from(match[1], 'hex').toString('latin1')).join(''));
+  if (bytes.includes(Buffer.from('/Root'))) { const extracted = require('node:child_process').spawnSync('pdftotext',['-','-'],{input:bytes,maxBuffer:10*1024*1024}); assert.equal(extracted.status,0); streamTexts = extracted.stdout.toString().split('\f'); }
   return { streams, text: streamTexts.join('\n'), streamTexts };
 }
 
@@ -166,7 +167,7 @@ test('enhancement uses typed facts and semantic text, preserves all prior sectio
   const result = await response.json();
   assert.equal(response.headers.get('cache-control'), 'private, no-store');
   assert.equal(result.sections.length, 16); assert.deepEqual(result.sections, prior.sections);
-  assert.equal(result.planetInsights.length, 8); assert.equal(result.summary, 'An updated chart-aware reflection.');
+  assert.deepEqual(result.planetInsights, prior.planetInsights); assert.equal(result.summary, prior.summary);
   assert.equal(result.birthChart.contextId, context.id); assert.equal(result.meta.astrology.contextId, context.id);
   assert.equal(result.meta.profileId, f.profileId); assert.equal(result.meta.birthTime, f.profile.birthTime);
   assert.equal(result.meta.astrology.engine.name, 'Kerykeion'); assert.equal(result.meta.astrology.usage, null);
@@ -336,6 +337,7 @@ test('malformed enhancements fail privately without overwriting a saved interpre
   for (const content of malformed) {
     options.content = content;
     for (const reading of [undefined, prior]) {
+      if (reading && malformed.indexOf(content) >= 6) continue; // Unrequested sky fields cannot replace accepted prior prose.
       const response = await enhanceRoute.POST(request('/api/reading/enhance', { contextId: context.id, reading }, f.identity.cookie));
       assert.equal(response.status, 502, content);
       assert.equal(response.headers.get('cache-control'), 'private, no-store');
@@ -537,6 +539,8 @@ test('PDF paginates long headings, overview, sections and synthesis without losi
   reading.birthChart.synthesis = body.slice(0, 1550) + ' FINAL_SYNTHESIS_SENTENCE.';
   reading.birthChart.reflection = 'FINAL_REFLECTION_QUESTION?';
   f.service.saveInterpretation(f.identity.id, context.id, reading);
+  reading.version = (reading.version ?? 0) + 1;
+  (await import('../server/reading-artifacts.mjs')).saveArtifact(f.identity.id, reading, context);
   const pdf = await pdfRoute.POST(request('/api/reading/pdf', { reading }, f.identity.cookie));
   assert.equal(pdf.status, 200, await pdf.clone().text());
   const bytes = Buffer.from(await pdf.arrayBuffer()), { text } = pdfContents(bytes);
@@ -605,4 +609,42 @@ test('live local chart and PDF endpoints export real worker wheels from syntheti
   assert.ok(!/FORGED_PROVIDER|DeepSeek|Kerykeion|Astrologer|Deepgram/i.test(text));
   assert.ok(streams.filter(stream => (stream.match(/\bc\b/g) ?? []).length >= 100).length >= 2,
     'both real wheels have substantial vector geometry beyond the page decoration');
+});
+
+test('daily chart addendum preserves mode and accepted text without requesting full sky content',async t=>{
+  const f=await fixture(t),context=await f.prepare(),prior=priorReading(context,f.profile);
+  prior.mode='today';prior.id='daily-version-test';prior.version=1;prior.sections=prior.sections.filter(s=>s.timeframe==='Today');
+  const response=await enhanceRoute.POST(request('/api/reading/enhance',{contextId:context.id,reading:prior},f.identity.cookie));
+  assert.equal(response.status,200);const reading=await response.json();
+  assert.equal(reading.mode,'today');assert.equal(reading.version,2);assert.deepEqual(reading.sections,prior.sections);assert.equal(reading.summary,prior.summary);
+  assert.deepEqual(Object.keys(f.lastPrompt.tools[0].function.parameters.properties),['birthChart']);assert.equal(f.lastPrompt.max_tokens,2400);
+  const pdf=await pdfRoute.POST(request('/api/reading/pdf',{reading,includeCharts:false},f.identity.cookie));assert.equal(pdf.status,200);
+  const bytes=Buffer.from(await pdf.arrayBuffer());assert.match(pdfContents(bytes).text,/Your Daily Reading/);
+  assert.ok((bytes.toString('latin1').match(/\/Type \/Page\b/g)||[]).length<=2);
+});
+
+test('immutable artifacts retain original prose after client tampering and expired chart contexts',async t=>{
+  const f=await fixture(t),context=await f.prepare();
+  const response=await enhanceRoute.POST(request('/api/reading/enhance',{contextId:context.id},f.identity.cookie));const reading=await response.json();
+  reading.summary='FORGED_CLIENT_READING';
+  const {astrology}=await import('../server/astrology.mjs');const original=astrology.resolveContext;astrology.resolveContext=()=>{throw new Error('expired');};t.after(()=>astrology.resolveContext=original);
+  const pdf=await pdfRoute.POST(request('/api/reading/pdf',{reading},f.identity.cookie));assert.equal(pdf.status,200);
+  const text=pdfContents(Buffer.from(await pdf.arrayBuffer())).text;assert.ok(!text.includes('FORGED_CLIENT_READING'));assert.ok(text.includes('updated chart-aware'));
+});
+
+test('standalone Today chart reading requests and validates one day only', async t => {
+  const f = await fixture(t), context = await f.prepare();
+  const response = await enhanceRoute.POST(request('/api/reading/enhance', { contextId: context.id, mode: 'today' }, f.identity.cookie));
+  assert.equal(response.status, 200);
+  const reading = await response.json();
+  assert.equal(reading.mode, 'today'); assert.equal(reading.sections.length, 4);
+  assert.ok(reading.sections.every(section => section.timeframe === 'Today'));
+  assert.equal(reading.planetInsights.length, 2);
+  assert.deepEqual(Object.keys(f.lastPrompt.tools[0].function.parameters.properties.sections.properties), ['Today']);
+  assert.equal(f.lastPrompt.max_tokens, 4000);
+  const compact = modelReading(context);
+  compact.sections = compact.sections.filter(section => section.timeframe === 'Today');
+  compact.planetInsights = compact.planetInsights.filter(insight => ['mercury','venus'].includes(insight.id));
+  assert.equal(enhancement.enhancementReadingInput(compact, undefined, 'today').sections.length, 4);
+  assert.throws(() => enhancement.enhancementReadingInput(compact));
 });

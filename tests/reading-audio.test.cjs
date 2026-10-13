@@ -115,7 +115,7 @@ test("forged, changed and expired scripts are rejected before a paid call", asyn
   assert.equal(calls, 0);
 });
 
-test("on-demand audio uses environment settings and returns one valid, seekable WAV", async () => {
+test("on-demand audio uses environment settings and returns one mixed AAC recording and reuses synthesis", async () => {
   setup("wav"); process.env.DEEPGRAM_MODEL = "aura-2"; process.env.DEEPGRAM_VOICE = "luna-en";
   const script = (scriptFor("Long reading") + " ").repeat(40).trim();
   let calls = 0;
@@ -132,14 +132,14 @@ test("on-demand audio uses environment settings and returns one valid, seekable 
   };
   const response = await audioRoute.POST(audioRequest(script));
   assert.equal(response.status, 200);
-  assert.equal(response.headers.get("content-type"), "audio/wav");
+  assert.equal(response.headers.get("content-type"), "audio/mp4");
   assert.equal(response.headers.get("cache-control"), "private, no-store");
   const buffer = Buffer.from(await response.arrayBuffer());
-  assert.equal(buffer.toString("ascii", 0, 4), "RIFF");
-  assert.equal(buffer.toString("ascii", 8, 12), "WAVE");
-  assert.equal(buffer.readUInt32LE(24), 24000);
-  assert.equal(buffer.readUInt32LE(40), calls * 8);
-  assert.equal(buffer.length, 44 + calls * 8);
+  assert.equal(buffer.toString('ascii',4,8), 'ftyp');
+  assert.ok(buffer.length > 100, 'mixed recording has a real media container');
+  const dry = await provider.generateReadingAudio(script, provider.getAudioConfig());
+  assert.equal(dry.toString('ascii',0,4), 'RIFF');
+  assert.equal(dry.readUInt32LE(40), calls * 8);
   const before = calls;
   assert.equal((await audioRoute.POST(audioRequest(script))).status, 200);
   assert.equal(calls, before, "replaying audio must not incur more provider calls");
@@ -257,6 +257,8 @@ test("streaming starts on tap, plays incoming PCM, pauses and disposes on a new 
     async suspend() { this.state = "suspended"; }
     async close() { this.state = "closed"; }
     createBuffer(_, length, sampleRate) { const data = new Float32Array(length); return { duration: length / sampleRate, getChannelData: () => data }; }
+    createGain() { return { gain:{value:1,setTargetAtTime(){}},connect(){} }; }
+    createMediaElementSource() { return {connect(){}}; }
     createBufferSource() { return { playbackRate: { value: 1 }, connect() {}, disconnect() {}, start() {}, stop() {} }; }
   }
   class Socket {
@@ -349,4 +351,30 @@ test("new reading aborts pending generation and prevents stale audio from playin
     assert.equal(harness.instances[0].src, "");
     assert.equal(harness.state.generating, false);
   } finally { harness.dispose(); }
+});
+
+test('Today requests one snapshot, four sections and no duplicate long narration', async () => {
+  setup('today'); process.env.DEEPSEEK_API_KEY='synthetic-key';
+  let calls=0;
+  global.fetch=async(url,options)=>{calls++;const request=JSON.parse(options.body);
+    assert.equal(request.max_tokens,2400);
+    const evidence=JSON.parse(request.messages[1].content.split('VALIDATED COMPUTATION DATA: ')[1].split('\n')[0]);
+    assert.equal(evidence.snapshots.length,1);
+    assert.match(request.messages[0].content,/Do not return future horizons or audioScript/);
+    return Response.json({choices:[{message:{content:JSON.stringify({greeting:'Welcome.',summary:'A thoughtful reflection for today.',sections:['Love & Connection','Purpose & Work','Body & Energy','Inner World'].map(title=>({title,timeframe:'Today',body:'Take a moment to reflect, and choose a kind action.'})),planetInsights:[{id:'venus',body:'Consider your connections.',reflection:'What needs care?'},{id:'mars',body:'Consider your effort.',reflection:'Where could you begin?'}],affirmation:'I meet today with care.'})}}]});};
+  const response=await readingRoute.POST(new Request('http://localhost/api/reading',{method:'POST',body:JSON.stringify({birthDate:'1990-05-01',readingDate:'2026-10-13',mode:'today'})}));
+  assert.equal(response.status,200);const reading=await response.json();
+  assert.equal(reading.mode,'today');assert.equal(reading.sections.length,4);assert.equal(reading.planetInsights.length,2);
+  assert.ok(reading.id && reading.version===1);assert.ok(response.headers.get('server-timing'));
+  assert.doesNotMatch(reading.audioScript,/coming month|coming week|next three days/);
+  assert.ok(provider.verifyAudio(reading.audioScript,reading.audioAuthorization,process.env.DEEPGRAM_API_KEY));assert.equal(calls,1);
+});
+
+test('completed streaming masters are reused by downloads without a provider request',async()=>{
+  setup('shared-master');const {masterKey,putMaster}=await import('../server/audio-master.mjs');
+  const script=scriptFor('Shared completed narration'),config=provider.getAudioConfig();
+  const pcm=Buffer.alloc(48000);putMaster(masterKey(script,config.model,config.apiKey),pcm);
+  global.fetch=()=>{throw new Error('Must reuse the stream');};
+  const wav=await provider.generateReadingAudio(script,config);assert.equal(wav.length,48044);
+  const result=await audioRoute.POST(audioRequest(script));assert.equal(result.status,200);assert.equal(result.headers.get('content-type'),'audio/mp4');
 });

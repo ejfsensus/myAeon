@@ -1,8 +1,10 @@
+import { saveArtifact } from "../../../../server/reading-artifacts.mjs";
+import { randomUUID } from "node:crypto";
 import { NextResponse } from "next/server";
 import { sameRequestOrigin } from "@/lib/serverRequest";
 import { getSunSign, ZODIAC_SIGNS } from "@/lib/zodiac";
 import {
-  ReadingInputSchema, SYSTEM_PROMPT, buildUserPrompt, generatedReading,
+  ReadingInputSchema, SYSTEM_PROMPT, TODAY_SYSTEM_PROMPT, buildUserPrompt, generatedReading,
   readingModelConfig, requestReadingJson, signedReadingAudio,
 } from "@/lib/readingGeneration";
 import { privateHeaders, readPrivateJson, requestFailure } from "@/lib/readingRequest";
@@ -11,6 +13,7 @@ export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 
 export async function POST(req: Request) {
+  const started = performance.now();
   let cookie: string | null = null;
   try {
     const input = ReadingInputSchema.parse(await readPrivateJson(req, 10_000));
@@ -35,12 +38,16 @@ export async function POST(req: Request) {
       timeZone: LONDON.timezone, year: "numeric", month: "2-digit", day: "2-digit",
     }).format(new Date());
     // Chart generation is an independent request, even when a profile is supplied.
-    const context = await astrology.prepare(owner, undefined, selectedDate, true, req.signal);
+    const context = await astrology.prepare(owner, undefined, selectedDate, input.mode === "full", req.signal);
+    const calculated = performance.now();
     const sunSign = getSunSign(new Date(`${input.birthDate}T12:00:00Z`));
-    const { json, config } = await requestReadingJson(SYSTEM_PROMPT, buildUserPrompt(input, sunSign.name, context), req.signal);
+    const { json, config } = await requestReadingJson(input.mode === "today" ? TODAY_SYSTEM_PROMPT : SYSTEM_PROMPT, buildUserPrompt(input, sunSign.name, context), req.signal, undefined, input.mode === "today" ? 2400 : 12288);
+    const generated = performance.now();
     const response = {
-      ...generatedReading(json, sunSign, context),
+      ...generatedReading(json, sunSign, context, input.mode),
+      id: randomUUID(), version: 1,
       meta: {
+        timezone: "Europe/London", schemaVersion: 2,
         provider: "deepseek", model: config.model, endpoint: config.url, endpointMode: config.mode,
         generatedAt: new Date().toISOString(), readingDate: context.selectedDate,
         profileId: input.profileId, birthDate: profile?.birthDate ?? input.birthDate,
@@ -49,7 +56,9 @@ export async function POST(req: Request) {
         astrology: contextMetadata(context),
       },
     };
-    return NextResponse.json({ ...response, ...signedReadingAudio(json?.audioScript, response) }, { headers: privateHeaders(cookie) });
+    const artifact = { ...response, ...signedReadingAudio(input.mode === "today" ? undefined : json?.audioScript, response) };
+    saveArtifact(owner, artifact, context);
+    return NextResponse.json(artifact, { headers: { ...privateHeaders(cookie), "Server-Timing": `calculation;dur=${(calculated-started).toFixed(1)},generation;dur=${(generated-calculated).toFixed(1)},total;dur=${(performance.now()-started).toFixed(1)}` } });
   } catch (error) {
     const failure = requestFailure(error, "Check your birth details, confirmed profile and sky date, then try again.");
     return NextResponse.json({ error: failure.error }, { status: failure.status, headers: privateHeaders(cookie) });

@@ -1,3 +1,4 @@
+import { masterKey, getMaster, pendingMaster, beginMaster, finishMaster } from "../../server/audio-master.mjs";
 import { createHash, createHmac, timingSafeEqual } from "node:crypto";
 import { splitSpeechText, type AudioAuthorization } from "./readingAudio";
 
@@ -129,6 +130,9 @@ async function requestChunk(text: string, config: ReturnType<typeof getAudioConf
 
 /** Generate only on demand. Deduplicate and reuse both complete and successful partial audio. */
 export async function generateReadingAudio(script: string, config: ReturnType<typeof getAudioConfig>) {
+  const sharedKey = masterKey(script, config.model, config.apiKey);
+  const master = getMaster(sharedKey); if (master) return pcmToWav(master);
+  const sharedPending = pendingMaster(sharedKey); if (sharedPending) return pcmToWav(await sharedPending);
   const scope = createHash("sha256").update(`${config.apiKey}\n${config.model}`).digest("hex");
   const key = createHash("sha256").update(`${scope}\nreading\n${script}`).digest("hex");
   const existing = getCached(key);
@@ -137,6 +141,7 @@ export async function generateReadingAudio(script: string, config: ReturnType<ty
   if (pending) return pending;
   if (inFlight.size >= 2) throw new AudioError("Reading audio is busy. Please try again shortly.", 429);
 
+  beginMaster(sharedKey);
   const task = (async () => {
     const signal = AbortSignal.timeout(config.timeoutMs);
     const texts = splitSpeechText(script);
@@ -168,10 +173,13 @@ export async function generateReadingAudio(script: string, config: ReturnType<ty
     }));
     await Promise.all(workers);
     if (failure) throw failure;
-    const wav = pcmToWav(Buffer.concat(chunks));
+    const pcm = Buffer.concat(chunks);
+    if (pcm.length > 600 * SAMPLE_RATE * 2) throw new AudioError("This narration exceeded ten minutes. Please generate a shorter reading.", 422);
+    finishMaster(sharedKey, pcm);
+    const wav = pcmToWav(pcm);
     putCached(key, wav);
     return wav;
   })();
   inFlight.set(key, task);
-  try { return await task; } finally { inFlight.delete(key); }
+  try { return await task; } catch (error) { finishMaster(sharedKey, undefined, error); throw error; } finally { inFlight.delete(key); }
 }

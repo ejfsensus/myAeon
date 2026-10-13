@@ -1,9 +1,12 @@
+import { saveArtifact } from "../../../../../server/reading-artifacts.mjs";
+import { randomUUID } from "node:crypto";
 import { NextResponse } from "next/server";
 import { sameRequestOrigin } from "@/lib/serverRequest";
 import { longitudeToSign } from "@/lib/zodiac";
 import { generatedReading, requestReadingJson, signedReadingAudio } from "@/lib/readingGeneration";
 import { privateHeaders, readPrivateJson, requestFailure } from "@/lib/readingRequest";
 import {
+  CHART_ADDENDUM_SCHEMA, CHART_ADDENDUM_PROMPT, TODAY_ENHANCEMENT_SCHEMA, TODAY_ENHANCEMENT_PROMPT,
   EnhancementInputSchema, ENHANCEMENT_SYSTEM_PROMPT, ENHANCEMENT_RESPONSE_SCHEMA, enhancementPrompt,
   normalizeBirthChart, normalizeEnhancementOutput, requireNatalContext, validatePriorReading, enhancementReadingInput,
 } from "@/lib/readingEnhancement";
@@ -25,13 +28,15 @@ export async function POST(req: Request) {
     // requireNatalContext checks both nullable server-owned records before use.
     if (!context || !profile) throw new Error("Missing chart");
     validatePriorReading(input.reading, context, profile);
-    const { json, config } = await requestReadingJson(ENHANCEMENT_SYSTEM_PROMPT, enhancementPrompt(context, input.reading, profile), req.signal, ENHANCEMENT_RESPONSE_SCHEMA);
-    const model = normalizeEnhancementOutput(json);
+    const mode = input.reading?.mode ?? input.mode ?? "full";
+    const addendum = Boolean(input.reading);
+    const { json, config } = await requestReadingJson(addendum ? CHART_ADDENDUM_PROMPT : mode === "today" ? TODAY_ENHANCEMENT_PROMPT : ENHANCEMENT_SYSTEM_PROMPT, enhancementPrompt(context, input.reading, profile), req.signal, addendum ? CHART_ADDENDUM_SCHEMA : mode === "today" ? TODAY_ENHANCEMENT_SCHEMA : ENHANCEMENT_RESPONSE_SCHEMA, addendum ? 2400 : mode === "today" ? 4000 : 12288);
+    const model = normalizeEnhancementOutput(json, mode);
     const sunSign = longitudeToSign(context.natal!.planets.find(point => point.name === "Sun")!.longitude);
     const birthChart = normalizeBirthChart(model?.birthChart, context);
-    const generated = generatedReading(enhancementReadingInput(model, input.reading), sunSign, context);
+    const generated = addendum ? { ...input.reading!, planetInsights: input.reading!.planetInsights ?? [] } : generatedReading(enhancementReadingInput(model, input.reading, mode), sunSign, context, mode);
     const response = {
-      ...generated,
+      ...generated, mode, id: input.reading?.id ?? randomUUID(), version: (input.reading?.version ?? 0) + 1,
       birthChart,
       meta: {
         provider: "deepseek", model: config.model, endpoint: config.url, endpointMode: config.mode,
@@ -42,6 +47,7 @@ export async function POST(req: Request) {
     };
     const fullReading = { ...response, ...signedReadingAudio(json?.audioScript, response) };
     await astrology.saveInterpretation(user.id, context.id, fullReading);
+    saveArtifact(user.id, fullReading, context);
     return NextResponse.json(fullReading, { headers: privateHeaders(cookie) });
   } catch (error) {
     const failure = requestFailure(error, "Your birth chart has expired or could not be interpreted. Prepare it again and retry.");
