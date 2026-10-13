@@ -25,7 +25,7 @@ import {
   type ChartContext,
   type ReadingWithChart,
 } from "@/components/ui/chartPresentation";
-import type { ThemeMode } from "@/components/ui/types";
+import type { ThemeMode, ZeusSource, ZeusReadingFocus } from "@/components/ui/types";
 import { downloadReadingPdf } from "@/components/ui/downloadReadingPdf";
 import { useReadingAudio } from "@/components/ui/useReadingAudio";
 import {
@@ -205,6 +205,8 @@ export default function Home({ initialDate }: { initialDate: string }) {
   const [isMobile, setIsMobile] = useState(false);
   const [sceneReady, setSceneReady] = useState(false);
   const [voiceOpen, setVoiceOpen] = useState(false);
+  const [zeusSource, setZeusSource] = useState<ZeusSource>("welcome");
+  const [zeusReadingFocus, setZeusReadingFocus] = useState<ZeusReadingFocus | null>(null);
   const [tourOpen, setTourOpen] = useState(false);
   const openTour = useCallback(() => {
     setVoiceOpen(false);
@@ -237,6 +239,7 @@ export default function Home({ initialDate }: { initialDate: string }) {
       enhanceRequest.current?.abort();
       enhanceRequest.current = null;
       setChart(null);
+      setSelectedFeature(null);
       setChartError(null);
       setChartLoading(false);
       setEnhancingChart(false);
@@ -554,12 +557,24 @@ export default function Home({ initialDate }: { initialDate: string }) {
     ? Math.floor(selectedPlanetPosition.longitude % 30)
     : null;
 
-  const navigate = (next: "solar" | "chart" | "reading" | "zeus") => {
+  const openZeus = (source: ZeusSource, focus: ZeusReadingFocus | null = null) => {
+    setZeusSource(source);
+    setZeusReadingFocus(focus);
     setWelcome(false);
     setDetailsOpen(false);
-    setVoiceOpen(next === "zeus");
     setExploring(false);
-    if (next !== "zeus") setWorkspace(next);
+    setVoiceOpen(true);
+  };
+  const navigate = (next: "solar" | "chart" | "reading" | "zeus") => {
+    if (next === "zeus") {
+      openZeus(welcome ? "welcome" : workspace);
+      return;
+    }
+    setWelcome(false);
+    setDetailsOpen(false);
+    setVoiceOpen(false);
+    setExploring(false);
+    setWorkspace(next);
   };
   const blocked =
     welcome || detailsOpen || voiceOpen || tourOpen || howItWorksOpen;
@@ -803,6 +818,7 @@ export default function Home({ initialDate }: { initialDate: string }) {
               selectedPlanetDegree={selectedPlanetDegree}
               onDownloadPdf={handleDownloadPdf}
               onClearSelectedPlanet={() => setSelectedPlanet(null)}
+              onAskZeus={(focus) => openZeus("reading", focus)}
               onEnhanceChart={() => void enhanceChart()}
               chartAvailable={Boolean(
                 currentChart?.natal &&
@@ -894,17 +910,19 @@ export default function Home({ initialDate }: { initialDate: string }) {
       />
       <QuickTour open={tourOpen} onClose={closeTour} />
       <VoiceExplorer
-        selectedFeature={selectedFeature}
+        source={zeusSource}
+        readingFocus={zeusReadingFocus}
+        selectedFeature={zeusSource === "chart" ? selectedFeature : null}
         theme={theme}
-        profileId={profileId}
-        contextId={currentChart?.id ?? reading?.birthChart?.contextId}
+        profileId={zeusSource === "reading" ? reading?.meta?.profileId : profileId}
+        contextId={zeusSource === "reading" ? reading?.birthChart?.contextId ?? readingChart.current : currentChart?.id}
         onUsageRefresh={refreshUsage}
         open={voiceOpen}
         onOpen={() => navigate("zeus")}
         onClose={() => setVoiceOpen(false)}
         reading={reading}
-        viewedDate={skyDate}
-        selectedPlanet={selectedPlanet?.id ?? null}
+        viewedDate={zeusSource === "reading" ? reading?.meta?.readingDate ?? skyDate : skyDate}
+        selectedPlanet={zeusSource === "solar" ? selectedPlanet?.id ?? null : null}
         onStart={() => {
           audio.stream.stop();
           audio.pause();

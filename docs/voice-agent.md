@@ -7,14 +7,13 @@ starts with fresh context, without requiring a reading.
 
 ## Provider Configuration
 
-- Live agent: Deepgram-managed OpenAI `gpt-6-luna`.
-- Voice: `aura-2-hyperion-en`, mono linear16 at 24 kHz.
-- Recognition: Deepgram Nova-3, mono linear16 at 16 kHz.
-- Reasoning: **`none`**. Live testing confirmed that Luna's function tools via
-  Deepgram's chat-completions integration fail with low/default reasoning.
-  No temperature override or unsupported token parameters are sent.
+- Live agent: Deepgram-managed Anthropic `claude-sonnet-4-6`.
+- Voice: Deepgram v2 `flux-rufus-en`, mono linear16 at 24 kHz.
+  `ZEUS_TTS_MODEL` overrides Zeus independently of reading narration.
+- Recognition: Deepgram v2 `flux-general-en`, mono linear16 at 16 kHz.
+- No temperature override or unsupported token parameters are sent.
 - DeepSeek remains exclusively the written-reading provider, not the agent.
-- Existing server-only `DEEPGRAM_API_KEY` is sufficient; no OpenAI key or
+- Existing server-only `DEEPGRAM_API_KEY` is sufficient; no Anthropic key or
   Deepgram agent UUID is needed. Managed voice-agent usage is billed by Deepgram.
 - `mip_opt_out: true` is sent. myAeon does not persist recordings/transcripts;
   provider processing/retention is subject to the Deepgram account's policies.
@@ -42,14 +41,15 @@ No default form values are assumed to be confirmed personal information.
 
 Functions use Deepgram's client-side dispatch protocol, but execute in myAeon's
 server proxy, not the browser. They are read-only, bounded and do not expose
-credentials. Context changes replace the prompt while preserving its base rules.
+credentials. Context changes send the latest base rules and session data through
+Deepgram's `UpdatePrompt` message.
 User-provided reading text is labeled untrusted data, not instructions.
 
 The existing 3D solar system is heliocentric. Its positions are **not** used as
 geocentric astrological facts. The agent explains that distinction when needed.
 Explicitly confirmed birthplace coordinates and IANA timezone support the local
 Kerykeion natal/transit calculation. London is the confirmed-default option;
-other places require explicit coordinates/timezone. Unknown times remain limited.
+other places support place search or explicit coordinates/timezone. Unknown times remain limited.
 No natal houses, Ascendant, retrograde flags or natal-to-transit aspects are
 invented. Estimated times omit houses and angles. See the
 [core integration plan](./kerykeion-core-plan.md).
@@ -93,4 +93,30 @@ it disables the greeting, requires a real tool-assisted answer and checks audio.
 Sources: [Browser Agent](https://developers.deepgram.com/docs/browser-agent-overview),
 [React UI](https://developers.deepgram.com/docs/browser-agent-react-ui),
 [Settings](https://developers.deepgram.com/docs/configure-voice-agent),
-[Functions](https://developers.deepgram.com/docs/build-a-function-call).
+[Functions](https://developers.deepgram.com/docs/build-a-function-call),
+[Maintaining context](https://developers.deepgram.com/docs/voice-agent-conversation-context),
+[Conversation text](https://developers.deepgram.com/docs/voice-agent-conversation-text),
+[Response completion](https://developers.deepgram.com/docs/voice-agent-agent-audio-done).
+
+## Launch focus and complete text replies
+
+Every launch includes its source: welcome, solar exploration, chart or reading.
+A selected chart placement includes its natal/transit frame, calculated facts
+and connected aspects. A reading-section launch includes the matching section's
+text and timeframe. The greeting adapts to that focus. Reading launches retain
+the accepted reading's date/profile after preview or birth-form changes.
+Owner-bound snapshots restore accepted reading text by ID/version and can supply
+stored natal facts after the shorter live chart context expires.
+
+Text mode uses the same provider through POST `/api/explore/session`, without
+microphone permission or browser audio. Each turn sends bounded recent dialogue
+as native `agent.context.messages` history. The server accumulates assistant
+`ConversationText` events and completes only on `AgentAudioDone`. A provider
+error, timeout, disconnect or cancellation never returns an unfinished sentence
+as a successful reply. Responses are bounded to 12,000 characters, two concurrent
+text turns and a 60-second deadline. Exceeding a limit fails explicitly rather
+than silently truncating.
+
+Regression tests cover multi-part text replies, native history, interrupted
+responses and initial selected facts. Frontend tests cover placement/section
+handoffs and accepted reading dates after preview changes.

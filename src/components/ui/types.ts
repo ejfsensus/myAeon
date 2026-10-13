@@ -3,6 +3,9 @@ import type { AudioAuthorization } from "@/lib/readingAudio";
 
 export type ThemeMode = "dark" | "light";
 
+export type ZeusSource = "welcome" | "solar" | "chart" | "reading";
+export type ZeusReadingFocus = { title: string; timeframe: string };
+
 export type PlanetInsight = {
   id: PlanetId;
   name: string;

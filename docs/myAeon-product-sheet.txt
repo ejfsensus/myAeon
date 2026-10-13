@@ -1,0 +1,73 @@
+myAeon — Product Sheet
+
+Purpose
+
+myAeon helps people explore astrology through calculated sky data, written reflections, spoken readings and conversation. It brings a daily perspective and a personal birth-chart view into one responsive workspace. The aim is understanding, reflection and personal agency; astrology is presented as a symbolic practice, rather than a promise of future events.
+
+Core experience
+
+The welcome screen offers four routes: a quick Today reading, a longer Full reading, planetary exploration, and a conversation with Zeus. People can move between the reading, chart and solar-system workspaces, choose a sky date, and use light or dark mode on desktop or mobile.
+
+Today reading
+
+Today is a concise reflection for the selected day. It contains a greeting, an overview, four life-domain sections, two relevant planetary highlights and an affirmation. Each section offers an interpretation and a practical point for reflection. It can be read on screen, heard with quiet ambient music, or exported as a PDF.
+
+Full reading
+
+Full explores four horizons: Today, 3 Days, Week and Month. Each horizon covers the same four life domains, giving 16 sections in total. It also includes an overview, eight planetary reflections and an affirmation. Earth’s reflection is about grounding; Earth is not treated as a geocentric natal planet. Written Full content is more detailed than its spoken condensation.
+
+The four life domains
+
+Love & Connection: relationships, communication, closeness, boundaries and mutual understanding.
+
+Purpose & Work: priorities, motivation, creative direction, responsibilities and useful next steps.
+
+Body & Energy: everyday pace, rest, attention and sustainable habits. This is reflective content, not medical assessment.
+
+Inner World: emotions, self-awareness, recurring patterns and the questions worth sitting with.
+
+Birth details and personalisation
+
+People enter a birth date, birthplace and their confidence in the birth time: known, estimated or unknown. Place search fills coordinates and timezone; advanced coordinate entry is also available. Permission to use the details is confirmed explicitly.
+
+The basic reading combines a broad Sun-sign theme with the calculated sky. A personal natal interpretation is a separate, explicit step. A known birth time supports the full chart, houses and angles. An estimated time gives approximate placements while omitting houses, angles and the full wheel. Unknown time supports a limited sky reading without fabricated natal Moon, Ascendant, houses or exact natal aspects.
+
+Birth-chart exploration and interpretation
+
+The chart workspace provides flat and tilted views, natal and transit comparison, placement selection and connected aspect inspection. Calculated facts are kept separate from AI interpretation. Original chart wheels can be downloaded as SVG files.
+
+“Interpret birth chart” creates a personal chart reading from computed natal facts. “Enhance with my birth chart” adds an interpretation to an existing reading. The addendum includes an overview, personal themes, synthesis and a reflection question while retaining the accepted reading’s original text and date.
+
+Solar exploration
+
+The observatory presents an interactive, illustrative solar system with planet selection, focus, reset and a top-down view. Movement is unlocked explicitly. The scene is heliocentric, while the astrology calculations are geocentric; these are different perspectives. A two-dimensional fallback supports devices without WebGL, and reduced-motion settings are respected.
+
+Listening and downloads
+
+Listening starts after the person taps a control. Spoken narration plays over quiet ambient music, with pause, stop, seeking, replay and faster playback controls. Audio downloads combine speech and the same music in an M4A file. Narration is designed to stay within ten minutes. Starting a Zeus conversation stops reading playback.
+
+PDF export is generated on demand from the accepted reading. An optional chart appendix adds available calculated wheels and evidence. Creating a PDF does not generate another reading or another narration.
+
+Zeus — the conversational agent
+
+Zeus is a patient, plainspoken astrology guide. People can speak with him or choose text without granting microphone access. Voice conversation provides a transcript, microphone mute and speaker mute controls. Text conversation retains bounded recent dialogue and presents the complete response.
+
+Zeus can explain astrology terms, discuss a written reading, explore computed natal placements, compare dated transits, describe lunar phases and retrieve an existing birth-chart interpretation. He uses tools to retrieve facts and distinguishes astronomical calculation from interpretive prose. A reading is not required for general conversation.
+
+Conversation starts from the place where Zeus is opened:
+
+From the welcome screen: a general conversation about the sky or astrology.
+From solar exploration: the selected planet and preview sky date, with the heliocentric display distinguished from astrological positions.
+From a chart placement: the selected body, natal or transit frame, date, available calculated placement and connected aspects.
+From a reading: the accepted reading and its original date.
+From “Ask Zeus about this” in a reading section: that section’s title, timeframe and text, alongside the wider reading.
+
+Zeus’s starting prompt and greeting adapt to this context. Voice-session context can be updated as the selected facts change. Text turns receive the current context and recent conversation history.
+
+Dates, privacy and continuity
+
+Selected-day sky snapshots use noon in Europe/London. The four horizons are dated snapshots, not calculations of exact event peaks. Changing the preview date or birth form preserves a completed reading; a new reading must be requested explicitly.
+
+Birth-chart calculations run on the app’s server. Reading text is generated remotely, and speech, messages and selected context are processed by remote providers when those features are used. Provider credentials stay on the server.
+
+Reading and audio snapshots are temporary, bounded server caches. They can expire or disappear after a restart, so myAeon does not currently promise permanent reading history or long-term conversation memory. Download the PDF or audio to keep a personal copy.

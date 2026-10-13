@@ -93,6 +93,40 @@ test('Cast confirms first, starts baseline/chart in parallel, and chart failure 
   } finally { h.close(); }
 });
 
+test('reading and chart Zeus launches carry their focus and preserve the accepted reading date', async () => {
+  const h = harness();
+  const voiceProps = () => h.tree.root.findAllByType('dynamic-ui').find(node => node.props.onStart).props;
+  try {
+    h.submit();
+    await h.resolve('/api/astrology/profile', { profileId: context.profileId });
+    await h.resolve('/api/astrology/chart', { context });
+    await h.resolve('/api/reading', {...reading,meta:{...reading.meta,profileId:context.profileId}});
+    const explain = h.props('BirthChartView').onExplain;
+    act(() => explain('Saturn', 'natal'));
+    assert.equal(voiceProps().source, 'chart');
+    assert.deepEqual(voiceProps().selectedFeature, {name:'Saturn',frame:'natal',date:'2026-10-10'});
+    assert.equal(voiceProps().contextId, context.id);
+    act(() => voiceProps().onClose());
+    const change = h.props('ControlPanel').onChange;
+    act(() => change({...h.input,readingDate:'2026-10-11'}));
+    const focus = {title:'Purpose & Work',timeframe:'Week'};
+    const ask = h.props('ReadingPanel').onAskZeus;
+    act(() => ask(focus));
+    assert.equal(voiceProps().source, 'reading');
+    assert.equal(voiceProps().viewedDate, '2026-10-10');
+    assert.equal(voiceProps().profileId, context.profileId);
+    assert.deepEqual(voiceProps().readingFocus, focus);
+    assert.equal(voiceProps().selectedFeature, null);
+    assert.equal(voiceProps().selectedPlanet, null);
+    act(() => voiceProps().onClose());
+    act(() => h.tree.root.findAllByType('button').find(node => node.props['aria-label'] === 'Welcome screen').props.onClick());
+    act(() => h.props('WelcomeScreen').onZeus());
+    assert.equal(voiceProps().source, 'welcome');
+    assert.equal(voiceProps().readingFocus, null);
+    assert.equal(voiceProps().selectedFeature, null);
+  } finally { h.close(); }
+});
+
 test('enhancement is explicit, uses the computed context, replaces payload, and reuses a matching chart', async () => {
   const h = harness();
   try {

@@ -4,7 +4,7 @@ import AstrologyStatus from "./AstrologyStatus";
 import { motion, AnimatePresence } from "framer-motion";
 import { useState, useEffect } from "react";
 import type { PlanetVisual, ZodiacSign } from "@/lib/zodiac";
-import type { PlanetInsight, ReadingPayload } from "./types";
+import type { PlanetInsight, ReadingPayload, ZeusReadingFocus } from "./types";
 import ReadingAudioPlayer from "./ReadingAudioPlayer";
 import type { ReadingAudioState } from "./useReadingAudio";
 import BirthChartReading from "./BirthChartReading";
@@ -24,6 +24,7 @@ type Props = ChartEnhancementProps & {
   selectedPlanetDegree: number | null;
   onDownloadPdf?: (includeCharts?: boolean) => void;
   onClearSelectedPlanet: () => void;
+  onAskZeus?: (focus: ZeusReadingFocus | null) => void;
 };
 
 const TIMEFRAMES = ["Today", "3 Days", "Week", "Month"] as const;
@@ -52,6 +53,7 @@ export default function ReadingPanel({
   selectedPlanetDegree,
   onDownloadPdf,
   onClearSelectedPlanet,
+  onAskZeus,
   ...chartEnhancement
 }: Props) {
   const [includeCharts, setIncludeCharts] = useState(false);
@@ -159,6 +161,7 @@ export default function ReadingPanel({
               <p className="text-white/90 text-sm mt-2 leading-relaxed">
                 {reading.summary}
               </p>
+              {onAskZeus && <button type="button" className="mt-2 min-h-11 text-xs text-astral-gold" onClick={() => onAskZeus(null)}>Discuss this reading with Zeus ↗</button>}
             </div>
 
             <AstrologyStatus metadata={reading.meta?.astrology} />
@@ -204,6 +207,7 @@ export default function ReadingPanel({
                       <p className="text-white/85 text-sm leading-relaxed whitespace-pre-line">
                         {section.body}
                       </p>
+                      {onAskZeus && <button type="button" aria-label={`Ask Zeus about ${section.title} for ${section.timeframe}`} className="mt-2 min-h-11 text-xs text-astral-gold" onClick={() => onAskZeus({ title: section.title, timeframe: section.timeframe })}>Ask Zeus about this ↗</button>}
                     </div>
                   ))}
                 {reading.sections.filter((s) => s.timeframe === tf).length === 0 && (

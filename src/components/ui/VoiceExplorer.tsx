@@ -3,10 +3,10 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { AudioLines, X, Mic, MicOff, Volume2, VolumeX, Send } from "lucide-react";
 import { AgentProvider, Orb, useAgentContext } from "@deepgram/ui";
 import type { AgentSessionConfig } from "@deepgram/agents";
-import type { ReadingPayload } from "./types";
+import type { ReadingPayload, ZeusSource, ZeusReadingFocus } from "./types";
 import Link from "next/link";
 import { publicMessage } from "./chartPresentation";
-type Props = { selectedFeature?: {name:string;frame:"natal"|"transit";date:string}|null; theme?: "dark" | "light"; profileId?: string; contextId?: string; onUsageRefresh: () => void; reading: ReadingPayload | null; viewedDate: string; selectedPlanet: string | null; onStart: () => void; open: boolean; onOpen: () => void; onClose: () => void };
+type Props = { source?: ZeusSource; readingFocus?: ZeusReadingFocus | null; selectedFeature?: {name:string;frame:"natal"|"transit";date:string}|null; theme?: "dark" | "light"; profileId?: string; contextId?: string; onUsageRefresh: () => void; reading: ReadingPayload | null; viewedDate: string; selectedPlanet: string | null; onStart: () => void; open: boolean; onOpen: () => void; onClose: () => void };
 
 function Conversation({ theme, onEnd }: { theme: "dark" | "light"; onEnd: (error?: string) => void }) {
   const agent = useAgentContext();
@@ -44,7 +44,7 @@ function Conversation({ theme, onEnd }: { theme: "dark" | "light"; onEnd: (error
   </>;
 }
 
-export default function VoiceExplorer({ selectedFeature, theme = "dark", profileId, contextId, onUsageRefresh, reading, viewedDate, selectedPlanet, onStart, open, onOpen, onClose }: Props) {
+export default function VoiceExplorer({ source = "welcome", readingFocus = null, selectedFeature, theme = "dark", profileId, contextId, onUsageRefresh, reading, viewedDate, selectedPlanet, onStart, open, onOpen, onClose }: Props) {
   const [textMode, setTextMode] = useState(false);
   const [question,setQuestion] = useState('');
   const [messages,setMessages] = useState<Array<{role:string;text:string}>>([]);
@@ -62,12 +62,13 @@ export default function VoiceExplorer({ selectedFeature, theme = "dark", profile
   const [error, setError] = useState<string | null>(null);
   const [sessionVersion, setSessionVersion] = useState(0);
   const [viewportHeight, setViewportHeight] = useState<number>();
-  const context = useRef({ reading, viewedDate, selectedPlanet, selectedFeature, profileId, contextId });
+  const context = useRef({ source, readingFocus, reading, viewedDate, selectedPlanet, selectedFeature, profileId, contextId });
   const token = useRef<string | null>(null);
   const closeButton = useRef<HTMLButtonElement>(null);
   const launchButton = useRef<HTMLButtonElement>(null);
   const startRef = useRef(onStart);
-  startRef.current = onStart; context.current = { reading, viewedDate, selectedPlanet, selectedFeature, profileId, contextId };
+  startRef.current = onStart; context.current = { source, readingFocus, reading, viewedDate, selectedPlanet, selectedFeature, profileId, contextId };
+  const focusLabel = source === "reading" ? readingFocus ? `${readingFocus.title} · ${readingFocus.timeframe} · ${viewedDate}` : `Your ${reading?.mode === "today" ? "daily" : "full"} reading · ${viewedDate}` : source === "chart" ? selectedFeature ? `${selectedFeature.name} · ${selectedFeature.frame} chart · ${viewedDate}` : `Your birth chart · ${viewedDate}` : source === "solar" ? `${selectedPlanet ? selectedPlanet.charAt(0).toUpperCase() + selectedPlanet.slice(1) + " · " : ""}Solar exploration · ${viewedDate}` : "The sky and astrology";
   const config = useMemo<AgentSessionConfig>(() => ({
     url: `${window.location.protocol === "https:" ? "wss:" : "ws:"}//${window.location.host}/api/explore`, reconnect: { enabled: false },
     auth: { tokenFactory: async () => {
@@ -85,7 +86,7 @@ export default function VoiceExplorer({ selectedFeature, theme = "dark", profile
     const controller = new AbortController();
     void fetch("/api/explore/session", { method: "POST", signal: controller.signal, headers: { "Content-Type": "application/json" }, body: JSON.stringify({ token: token.current, context: context.current }) }).then(res => { if (!res.ok && res.status !== 410) setError("Restart the conversation to use your latest reading."); }).catch(() => { if (!controller.signal.aborted) setError("Could not refresh conversation context."); });
     return () => controller.abort();
-  }, [reading, viewedDate, selectedPlanet, selectedFeature, profileId, contextId, open]);
+  }, [source, readingFocus, reading, viewedDate, selectedPlanet, selectedFeature, profileId, contextId, open]);
   useEffect(() => {
     if (!open) return;
     const previous = document.activeElement as HTMLElement | null;
@@ -101,7 +102,7 @@ export default function VoiceExplorer({ selectedFeature, theme = "dark", profile
         if (event.key === "Escape") onClose();
         if (event.key === "Tab") { const elements = event.currentTarget.querySelectorAll<HTMLElement>('button:not([disabled]), input:not([disabled]), [tabindex="0"], a[href]'); const first = elements[0]; const last = elements[elements.length - 1]; if (event.shiftKey && document.activeElement === first) { event.preventDefault(); last?.focus(); } else if (!event.shiftKey && document.activeElement === last) { event.preventDefault(); first?.focus(); } }
       }}>
-        <header className="flex shrink-0 items-center justify-between border-b border-[var(--panel-border)] px-5 pb-4 pt-[calc(env(safe-area-inset-top)+1rem)]"><div><h2 id="voice-heading" className="text-lg font-medium">Talk to Zeus</h2><p className="mt-1 text-xs opacity-60">{reading ? "Your reading and the sky" : "The sky and astrology"}</p></div><button ref={closeButton} onClick={onClose} aria-label="Close and end conversation" className="flex h-11 w-11 items-center justify-center rounded-lg hover:bg-white/10"><X size={20} /></button></header>
+        <header className="flex shrink-0 items-center justify-between border-b border-[var(--panel-border)] px-5 pb-4 pt-[calc(env(safe-area-inset-top)+1rem)]"><div><h2 id="voice-heading" className="text-lg font-medium">Talk to Zeus</h2><p className="mt-1 text-xs opacity-60">{focusLabel}</p></div><button ref={closeButton} onClick={onClose} aria-label="Close and end conversation" className="flex h-11 w-11 items-center justify-center rounded-lg hover:bg-white/10"><X size={20} /></button></header>
         {error && <p role="alert" className="mx-5 mt-3 text-sm text-red-500">{error}</p>}
         <div className="zeus-mode" role="group" aria-label="Conversation mode"><button aria-pressed={!textMode} onClick={()=>{textRequest.current?.abort();setTextMode(false);}}>Voice</button><button aria-pressed={textMode} onClick={()=>{token.current=null;setTextMode(true);}}>Text · no microphone</button></div>
         {textMode ? <><div className="zeus-suggestions">{['Explain today’s sky','Help me understand my reading','Explore the selected placement'].map(q=><button key={q} disabled={asking} onClick={()=>void ask(q)}>{q}</button>)}</div><div className="zeus-text-log" role="log" aria-label="Conversation transcript">{messages.map((m,i)=><div key={i}><strong>{m.role}</strong><p>{m.text}</p></div>)}{asking&&<p role="status">Zeus is reflecting…</p>}</div><form className="zeus-text-form" onSubmit={e=>{e.preventDefault();void ask(question);}}><input aria-label="Message Zeus without a microphone" value={question} onChange={e=>setQuestion(e.target.value)} maxLength={2000} placeholder="What would you like to explore?"/><button disabled={asking||!question.trim()}>Send</button></form></> : <AgentProvider key={sessionVersion} config={config} tts><Conversation theme={theme} onEnd={message => { token.current = null; onUsageRefresh(); setError(message || null); setSessionVersion(value => value + 1); }} /></AgentProvider>}

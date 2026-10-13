@@ -3,11 +3,12 @@ import assert from 'node:assert/strict';
 import { createServer } from 'node:http';
 import { EventEmitter, once } from 'node:events';
 import WebSocket, { WebSocketServer } from 'ws';
-import { skyAt, contextSchema, agentSettings, runFunction, buildPrompt } from '../server/agent-context.mjs';
+import { skyAt, contextSchema, agentSettings, runFunction, buildPrompt, launchContext } from '../server/agent-context.mjs';
 import { createVoiceAgent } from '../server/voice-agent.mjs';
 import { createAstrologyService } from '../server/astrology.mjs';
 import { userIdentity } from '../server/astrology-quota.mjs';
 import { knownProfile, localWorkerFixture } from './fixtures/kerykeion.mjs';
+import { saveArtifact } from '../server/reading-artifacts.mjs';
 
 test('fresh geocentric sky includes Sun and Moon, excludes visual Earth', () => {
   const sky = skyAt(new Date('2026-10-09T12:00:00Z'));
@@ -135,7 +136,7 @@ test('Zeus cancels stale chart work on refresh/disconnect and resolves live call
   assert.ok(aborted.includes('2026-10-13')); assert.ok(!messages.some(m => m.type === 'FunctionCallResponse' && m.id === 'ended'));
 });
 
-async function ownedInterpretationSession(t) {
+async function ownedInterpretationSession(t, options = {}) {
   const keys = ['DEEPGRAM_API_KEY', 'ASTROLOGY_SESSION_SECRET', 'ASTROLOGY_ENABLED'];
   const previous = Object.fromEntries(keys.map(key => [key, process.env[key]]));
   Object.assign(process.env, { DEEPGRAM_API_KEY: 'synthetic-voice-key', ASTROLOGY_SESSION_SECRET: 'synthetic-owner-test-secret-at-least-32-characters', ASTROLOGY_ENABLED: 'true' });
@@ -147,6 +148,13 @@ async function ownedInterpretationSession(t) {
   const birthChart = { contextId: context.id, title: 'Server interpretation', overview: 'SAVED_SERVER_OVERVIEW', sections: [{ title: 'Natal reflection', body: 'Saved measured reflection.' }], synthesis: 'SAVED_SERVER_SYNTHESIS', reflection: 'A saved question.' };
   const reading = { sunSign: { id: 'taurus', name: 'Taurus', symbol: 'T' }, greeting: 'Saved greeting.', summary: 'SAVED_SERVER_SUMMARY', sections: [{ title: 'Love & Connection', timeframe: 'Today', body: 'SAVED_SERVER_SECTION' }], affirmation: 'Saved affirmation.', birthChart, meta: { readingDate: context.selectedDate, birthDate: knownProfile.birthDate } };
   service.saveInterpretation(identity.id, context.id, reading);
+  if (options.snapshot) {
+    reading.id = 'saved-reading-launch'; reading.version = 1;
+    saveArtifact(identity.id, reading, context);
+    service.resolveContext = () => null;
+    service.getInterpretation = () => null;
+    service.prepare = async () => { throw new Error('Live chart expired'); };
+  }
   const currentReading = { ...reading, summary: 'CURRENT_BASE_SUMMARY', sections: [{ title: 'Love & Connection', timeframe: 'Today', body: 'CURRENT_BASE_SECTION' }] };
   const forged = { ...currentReading, birthChart: { ...birthChart, overview: 'FORGED_CLIENT_OVERVIEW', synthesis: 'FORGED_CLIENT_SYNTHESIS' } };
   const messages = [], clientMessages = [], events = new EventEmitter();
@@ -167,7 +175,7 @@ async function ownedInterpretationSession(t) {
   t.after(async () => { voice.wss.clients.forEach(socket => socket.terminate()); voice.wss.close(); await new Promise(resolve => server.close(resolve)); });
   const host = `127.0.0.1:${server.address().port}`;
   const request = body => fetch(`http://${host}/api/explore/session`, { method: 'POST', headers: { Origin: `http://${host}`, Cookie: identity.cookie, 'Content-Type': 'application/json' }, body: JSON.stringify(body) });
-  const response = await request({ context: { viewedDate: context.selectedDate, contextId: context.id, reading: forged } });
+  const response = await request({ context: { viewedDate: context.selectedDate, contextId: context.id, reading: forged, ...(options.snapshot ? {source:'reading',readingFocus:{title:'Love & Connection',timeframe:'Today'}} : {}) } });
   assert.equal(response.status, 200, await response.clone().text());
   const { token } = await response.json();
   const client = new WebSocket(`ws://${host}/api/explore/v1/agent/converse`, ['bearer', token], { headers: { Origin: `http://${host}` } });
@@ -229,6 +237,17 @@ test('a conversation permits more than 24 sequential tool calls with no lifetime
   assert.ok(!session.clientMessages.some(message => message.type === 'Error'));
 });
 
+test('reading launches restore accepted owner-bound text and chart facts after live context expiry', async t => {
+  const session = await ownedInterpretationSession(t, {snapshot:true});
+  const settings = session.messages.find(message => message.type === 'Settings');
+  assert.match(settings.agent.think.prompt, /SAVED_SERVER_SUMMARY/);
+  assert.match(settings.agent.think.prompt, /SAVED_SERVER_SECTION/);
+  assert.doesNotMatch(settings.agent.think.prompt, /CURRENT_BASE_SUMMARY|FORGED_CLIENT/);
+  assert.match(settings.agent.greeting, /Love & Connection, Today/);
+  assert.deepEqual((await session.call('get_natal_chart')).natal, session.context.natal);
+  assert.deepEqual(await session.call('get_reading'), contextSchema.shape.reading.parse(session.reading));
+});
+
 test('typed Zeus uses the configured provider, bounded history and no microphone audio', async t => {
   const oldKey = process.env.DEEPGRAM_API_KEY;
   process.env.DEEPGRAM_API_KEY = 'synthetic-test-key';
@@ -239,15 +258,53 @@ test('typed Zeus uses the configured provider, bounded history and no microphone
     assert.equal(binary,false);
     const message=JSON.parse(data); received.push(message);
     if(message.type==='Settings')socket.send(JSON.stringify({type:'SettingsApplied'}));
-    if(message.type==='InjectUserMessage')socket.send(JSON.stringify({type:'ConversationText',role:'assistant',content:'Take one thoughtful step today.'}));
+    if(message.type==='InjectUserMessage' && message.content === 'Interrupt this response') {
+      socket.send(JSON.stringify({type:'ConversationText',role:'assistant',content:'An unfinished first sentence.'}));
+      socket.close();
+    } else if(message.type==='InjectUserMessage') {
+      socket.send(JSON.stringify({type:'ConversationText',role:'assistant',content:'Take one thoughtful step today.'}));
+      setTimeout(() => {
+        socket.send(JSON.stringify({type:'ConversationText',role:'assistant',content:'Let it be small enough to finish.'}));
+        socket.send(Buffer.alloc(4));
+        socket.send(JSON.stringify({type:'AgentAudioDone'}));
+      }, 40);
+    }
   }));
   const agent = createVoiceAgent({connect:()=>new WebSocket(`ws://127.0.0.1:${upstream.address().port}`)});
   const server=createServer((req,res)=>agent.handle(req,res));server.listen(0,'127.0.0.1');await once(server,'listening');
   t.after(()=>{server.close();for(const socket of upstream.clients)socket.terminate();upstream.close();});
   const origin=`http://127.0.0.1:${server.address().port}`;
   const result=await fetch(`${origin}/api/explore/session`,{method:'POST',headers:{Origin:origin,'Content-Type':'application/json'},body:JSON.stringify({context:{viewedDate:'2026-10-13'},message:'How can I start?',history:[{role:'You',text:'I want a calmer morning.'}]})});
-  assert.equal(result.status,200);assert.equal((await result.json()).reply,'Take one thoughtful step today.');
+  assert.equal(result.status,200);assert.equal((await result.json()).reply,'Take one thoughtful step today. Let it be small enough to finish.');
   assert.equal(received[0].agent.think.provider.model,'claude-sonnet-4-6');
-  assert.match(received[0].agent.think.prompt,/calmer morning/);
+  assert.deepEqual(received[0].agent.context.messages,[{type:'History',role:'user',content:'I want a calmer morning.'}]);
   assert.equal(received[1].content,'How can I start?');
+  const incomplete=await fetch(`${origin}/api/explore/session`,{method:'POST',headers:{Origin:origin,'Content-Type':'application/json'},body:JSON.stringify({context:{viewedDate:'2026-10-13'},message:'Interrupt this response'})});
+  assert.equal(incomplete.status,400);
+  assert.equal((await incomplete.json()).reply,undefined,'an interrupted sentence is never returned as a completed answer');
+});
+
+test('launch context includes the clicked section, calculated placement and connected aspects', () => {
+  const section = {title:'Purpose & Work',timeframe:'Week',body:'Make room for a focused project.'};
+  const reading = {greeting:'Hello',summary:'Saved reflection',sections:[section],affirmation:'Choose care',meta:{readingDate:'2026-10-09'}};
+  const readingContext = {source:'reading',viewedDate:'2026-10-09',reading,readingFocus:{title:section.title,timeframe:section.timeframe}};
+  assert.deepEqual(launchContext(readingContext).selectedReadingSection, section);
+  assert.match(agentSettings(readingContext).agent.greeting, /Purpose & Work, Week/);
+  assert.match(buildPrompt(readingContext), /Make room for a focused project/);
+  const planet = {name:'Saturn',sign:'Aries',degree:8.1,longitude:8.1,house:'Tenth_House',retrograde:true};
+  const aspect = {first:'Saturn',second:'Moon',aspect:'trine',orb:1.25};
+  const natalContext = {source:'chart',viewedDate:'2026-10-13',selectedFeature:{name:'Saturn',frame:'natal',date:'2026-10-13'},astrology:{snapshots:[],confidence:'known',natal:{source:'Kerykeion',planets:[planet],angles:[],aspects:[aspect]}}};
+  assert.deepEqual(launchContext(natalContext).selectedPlacement, planet);
+  assert.deepEqual(launchContext(natalContext).selectedAspects, [aspect]);
+  assert.match(buildPrompt(natalContext), /Tenth_House/);
+  assert.match(agentSettings(natalContext).agent.greeting, /natal Saturn/);
+  const transit = {...planet,degree:9.2,house:undefined};
+  const transitAspect = {natal:'Moon',transit:'Saturn',aspect:'trine',orb:2.35};
+  const transitContext = {...natalContext,selectedFeature:{...natalContext.selectedFeature,frame:'transit'},astrology:{...natalContext.astrology,snapshots:[{date:'2026-10-13',at:'2026-10-13T11:00:00Z',planets:[transit],natalAspects:[transitAspect]}]}};
+  assert.deepEqual(launchContext(transitContext).selectedPlacement, transit);
+  assert.deepEqual(launchContext(transitContext).selectedAspects, [transitAspect]);
+  assert.equal(launchContext({...transitContext,viewedDate:'2026-10-14'}).selectedPlacement,null);
+  assert.equal(launchContext({...readingContext,readingFocus:{title:'Forged body',timeframe:'Month'}}).selectedReadingSection,null);
+  assert.match(agentSettings({source:'solar',viewedDate:'2026-10-13',selectedPlanet:'earth'}).agent.greeting, /earth in the solar view/);
+  assert.equal(launchContext({...natalContext,source:'welcome'}).selectedPlacement,null);
 });
