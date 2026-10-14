@@ -10,6 +10,10 @@ insights with their reflections, any explicit birthChart overview, sections, syn
 and reflection, and the closing affirmation. Preserve the written
 reading's meaning and practical advice; do not add facts, predictions, natal details,
 or new claims. Keep the same symbolic, non-deterministic framing.
+Give the listener the practical takeaway and one manageable action for each topic,
+including why it may help and a short example when space allows. Keep useful
+support from the written reading when condensing it; reduce repeated placement
+descriptions first. Translate necessary technical context into everyday meaning.
 Aim for 700 to 900 words, and stay below 20000 characters. Use calm, warm, natural
 conversational English, second-person address, short sentences, and brief paragraphs.
 Use spoken transitions so listeners always know the timeframe and topic without
@@ -83,7 +87,7 @@ export function resolveAudioScript(raw: unknown, reading: {
   }
   paragraphs.push(`To close, your affirmation. ${reading.affirmation}`);
   // Never truncate in the middle of a spoken sentence.
-  const wordBudget = reading.mode === "today" ? 500 : 1000;
+  const wordBudget = reading.mode === "today" && !reading.birthChart ? 750 : 1000;
   const original = cleanSpeechText(paragraphs.join("\n\n"));
   if (original.split(/\s+/).length <= wordBudget && original.length <= MAX_AUDIO_SCRIPT_CHARS) return original;
   const perTopic = Math.max(12, Math.floor(wordBudget / paragraphs.length));

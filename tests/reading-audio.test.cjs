@@ -370,6 +370,17 @@ test('Today requests one snapshot, four sections and no duplicate long narration
   assert.ok(provider.verifyAudio(reading.audioScript,reading.audioAuthorization,process.env.DEEPGRAM_API_KEY));assert.equal(calls,1);
 });
 
+test('expanded daily narration keeps practical guidance at the end of each domain', () => {
+  const titles = ['Love & Connection', 'Purpose & Work', 'Body & Energy', 'Inner World'];
+  const reading = {mode:'today',greeting:'Welcome.',summary:'Choose a pace that leaves room for care.',affirmation:'One manageable step is enough to begin.',
+    sections:titles.map(title => ({title,timeframe:'Today',body:'You can choose a manageable pace. '.repeat(20)+`Try one small step for ${title.toLowerCase()} and notice whether it fits.`})),
+    planetInsights:[{title:'Mercury: Communication',body:'Give yourself room to think. '.repeat(8),reflection:'What would help you feel heard?'},{title:'Venus: Care',body:'Leave space for a kind conversation. '.repeat(8),reflection:'What needs a little care?'}]};
+  const script=speech.resolveAudioScript(undefined,reading);
+  assert.ok(script.split(/\s+/).length > 500 && script.split(/\s+/).length <= 750);
+  for (const section of reading.sections) assert.ok(script.includes(speech.cleanSpeechText(`Try one small step for ${section.title.toLowerCase()}`)));
+  assert.ok(script.includes(reading.affirmation));
+});
+
 test('completed streaming masters are reused by downloads without a provider request',async()=>{
   setup('shared-master');const {masterKey,putMaster}=await import('../server/audio-master.mjs');
   const script=scriptFor('Shared completed narration'),config=provider.getAudioConfig();

@@ -10,7 +10,7 @@ The welcome screen offers four routes: a quick Today reading, a longer Full read
 
 Today reading
 
-Today is a concise reflection for the selected day. It contains a greeting, an overview, four life-domain sections, two relevant planetary highlights and an affirmation. Each section offers an interpretation and a practical point for reflection. It can be read on screen, heard with quiet ambient music, or exported as a PDF.
+Today is a focused reflection for the selected day. It contains a greeting, an overview, four life-domain sections, two relevant planetary highlights and an affirmation. Each section translates the overall calculated pattern into an everyday takeaway, a manageable action, an explanation of why it may help, and an example or lower-effort alternative. Placement details remain as supporting context. It can be read on screen, heard with quiet ambient music, or exported as a PDF.
 
 Full reading
 
@@ -50,7 +50,7 @@ PDF export is generated on demand from the accepted reading. An optional chart a
 
 Zeus — the conversational agent
 
-Zeus is a patient, plainspoken astrology guide. People can speak with him or choose text without granting microphone access. Voice conversation provides a transcript, microphone mute and speaker mute controls. Text conversation retains bounded recent dialogue and presents the complete response.
+Zeus is a patient, plainspoken astrology guide. He explains what a pattern may mean in everyday life, suggests one useful step and helps adapt it to the person's time and capacity. People can speak with him or choose text without granting microphone access. Voice conversation provides a transcript, microphone mute and speaker mute controls. Text conversation retains bounded recent dialogue and presents the complete response.
 
 Zeus can explain astrology terms, discuss a written reading, explore computed natal placements, compare dated transits, describe lunar phases and retrieve an existing birth-chart interpretation. He uses tools to retrieve facts and distinguishes astronomical calculation from interpretive prose. A reading is not required for general conversation.
 

@@ -86,6 +86,6 @@ test('anonymous baseline works without chart session configuration and does not 
   const fallback = await readingRoute.POST(request('/api/reading', { birthDate: '1990-05-01', readingDate: '2026-10-09' }));
   assert.equal(fallback.status, 200, 'baseline fallback behavior is unchanged');
   const repaired = await fallback.json();
-  assert.match(repaired.summary, /grounded fallback/);
+  assert.match(repaired.summary, /general reflections/);
   assert.equal(repaired.sections.length, 16); assert.equal(repaired.planetInsights.length, 8);
 });

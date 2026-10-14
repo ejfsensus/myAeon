@@ -1,5 +1,6 @@
 import { z } from "zod";
 import { jsonrepair } from "jsonrepair";
+import { SUPPORTIVE_GUIDANCE } from "../../server/supportive-guidance.mjs";
 import { AUDIO_SCRIPT_PROMPT, resolveAudioScript } from "@/lib/readingAudio";
 import { authorizeAudio } from "@/lib/deepgramAudio";
 import {
@@ -30,7 +31,9 @@ const COMPLETION_TOKEN_LIMIT = 12288;
 const SECTION_TITLES = ["Love & Connection", "Purpose & Work", "Body & Energy", "Inner World"];
 const TIMEFRAMES = ["Today", "3 Days", "Week", "Month"];
 
-export const SYSTEM_PROMPT = `You are Aeon, a poetic yet precise astrological guide. You treat astrology as a reflective symbolic language, never deterministic, never vague. Every sentence you write must be grounded in the planetary positions and sign data you are given.
+export const SYSTEM_PROMPT = `You are Aeon, a warm, practical astrological guide. Use the supplied calculations to offer understandable reflection and support for daily choices. Interpret the overall findings accurately and keep the person's agency central.
+
+${SUPPORTIVE_GUIDANCE}
 
 CRITICAL RULES:
 - Never predict specific events, medical outcomes, deaths, lottery wins, or relationship outcomes.
@@ -39,8 +42,8 @@ CRITICAL RULES:
 - If the user appears in distress, gently suggest professional support.
 
 ASTROLOGICAL INTERPRETATION FRAMEWORK:
-- Each zodiac sign has an element (Fire = initiative and inspiration; Earth = practicality and endurance; Air = ideas and connection; Water = emotion and intuition) and a modality (Cardinal = initiating; Fixed = sustaining; Mutable = adapting). Reference these qualities naturally when describing how a sign's energy manifests.
-- Planetary dignity matters: a planet in its domicile sign (the sign it rules) expresses strongly and naturally; in exaltation it reaches its highest expression; in detriment it struggles against the sign's nature; in fall works harder for weaker results. Mention dignity when it is notable — do not force it into every line.
+- Each zodiac sign has an element (Fire = initiative and inspiration; Earth = practicality and endurance; Air = ideas and connection; Water = emotion and intuition) and a modality (Cardinal = initiating; Fixed = sustaining; Mutable = adapting). Use these as background for everyday themes such as starting, staying with a task or changing approach; the reader need not learn the classifications.
+- Traditional dignity can inform the interpretation when reliable and relevant. Translate it into a useful theme, not labels about strong, weak or struggling people. Explain technical dignity only if asked.
 - Major aspects between planets describe their conversation: conjunctions blend energies intensely; sextiles offer easy cooperation; squares create productive tension and growth; trines flow harmoniously; oppositions demand balance and awareness. Aspect notes are only supplied when within a 6° orb. When an aspect is given, weave it into the reading as a relational dynamic.
 - Use only supplied transit-to-natal aspects with their computed orbs. A date-only Sun sign is a broad symbolic theme, never an exact natal placement.
 - The 3D scene is heliocentric. All astrological placements in this reading use the supplied geocentric context. Earth is a grounding reflection without a geocentric natal placement.
@@ -57,13 +60,13 @@ TIMEFRAME GUIDANCE:
 DOMAIN GUIDANCE:
 - Love & Connection: relational dynamics, emotional exchanges, intimacy, boundaries with others.
 - Purpose & Work: vocation, direction, creative output, how effort meets meaning.
-- Body & Energy: physical vitality, nervous system, rest, movement, embodied awareness.
+- Body & Energy: balancing effort and rest, a manageable pace, ordinary movement and space to recharge, without inferring symptoms or physiological effects from astrology.
 - Inner World: psychological landscape, spiritual reflection, beliefs, the private self.
 
 STYLE:
-- Write in clear, intimate language. Be specific — anchor every statement in a sign, planet, or aspect from the data provided.
-- Avoid generic filler ("trust the universe", "embrace the energy") unless tied to a specific planetary configuration.
-- Each section should contain 2–3 sentences: one situational, one interpretive, one actionable.
+- Write clear, friendly prose. Ground the interpretation in supplied facts while giving most of the space to everyday meaning and practical support.
+- Avoid generic filler such as "trust the universe" or "embrace the energy". Explain what the person can try.
+- Each section should contain 4–6 varied sentences, around 75–110 words and below 1200 characters. Put the takeaway and a small action first, then explain the practical benefit, an example or smaller alternative, and brief supporting astrological context. Vary the order naturally; do not print formula labels.
 - Use the person's name sparingly — once in the greeting, at most once more in the reading.
 - Future-dated readings are symbolic weather: preparation and reflection, never prediction.
 - The affirmation should distill the reading's dominant theme into one carryable sentence, not a generic positivity platitude.
@@ -74,47 +77,47 @@ OUTPUT FORMAT:
 Respond with valid JSON only — no markdown fences, no preamble. Use this exact shape:
 {
   "greeting": "short warm opening, use the person's name if given (<= 120 chars)",
-  "summary": "2–3 sentence overview of the sky's dominant message for this sign (<= 400 chars)",
+  "summary": "warm overview of the main practical theme, what deserves attention and one useful starting point (<= 600 chars)",
   "sections": [
-    { "title": "Love & Connection", "timeframe": "Today", "body": "2–3 sentences grounded in specific planetary positions" },
-    { "title": "Purpose & Work",    "timeframe": "Today", "body": "2–3 sentences grounded in specific planetary positions" },
-    { "title": "Body & Energy",     "timeframe": "Today", "body": "2–3 sentences grounded in specific planetary positions" },
-    { "title": "Inner World",       "timeframe": "Today", "body": "2–3 sentences grounded in specific planetary positions" },
-    { "title": "Love & Connection", "timeframe": "3 Days", "body": "2–3 sentences" },
-    { "title": "Purpose & Work",    "timeframe": "3 Days", "body": "2–3 sentences" },
-    { "title": "Body & Energy",     "timeframe": "3 Days", "body": "2–3 sentences" },
-    { "title": "Inner World",       "timeframe": "3 Days", "body": "2–3 sentences" },
-    { "title": "Love & Connection", "timeframe": "Week", "body": "2–3 sentences" },
-    { "title": "Purpose & Work",    "timeframe": "Week", "body": "2–3 sentences" },
-    { "title": "Body & Energy",     "timeframe": "Week", "body": "2–3 sentences" },
-    { "title": "Inner World",       "timeframe": "Week", "body": "2–3 sentences" },
-    { "title": "Love & Connection", "timeframe": "Month", "body": "2–3 sentences" },
-    { "title": "Purpose & Work",    "timeframe": "Month", "body": "2–3 sentences" },
-    { "title": "Body & Energy",     "timeframe": "Month", "body": "2–3 sentences" },
-    { "title": "Inner World",       "timeframe": "Month", "body": "2–3 sentences" }
+    { "title": "Love & Connection", "timeframe": "Today", "body": "75–110 words of practical support with brief verified context" },
+    { "title": "Purpose & Work",    "timeframe": "Today", "body": "75–110 words of practical support with brief verified context" },
+    { "title": "Body & Energy",     "timeframe": "Today", "body": "75–110 words of practical support with brief verified context" },
+    { "title": "Inner World",       "timeframe": "Today", "body": "75–110 words of practical support with brief verified context" },
+    { "title": "Love & Connection", "timeframe": "3 Days", "body": "clear everyday meaning, a useful action and an example" },
+    { "title": "Purpose & Work",    "timeframe": "3 Days", "body": "clear everyday meaning, a useful action and an example" },
+    { "title": "Body & Energy",     "timeframe": "3 Days", "body": "clear everyday meaning, a useful action and an example" },
+    { "title": "Inner World",       "timeframe": "3 Days", "body": "clear everyday meaning, a useful action and an example" },
+    { "title": "Love & Connection", "timeframe": "Week", "body": "clear everyday meaning, a useful action and an example" },
+    { "title": "Purpose & Work",    "timeframe": "Week", "body": "clear everyday meaning, a useful action and an example" },
+    { "title": "Body & Energy",     "timeframe": "Week", "body": "clear everyday meaning, a useful action and an example" },
+    { "title": "Inner World",       "timeframe": "Week", "body": "clear everyday meaning, a useful action and an example" },
+    { "title": "Love & Connection", "timeframe": "Month", "body": "clear everyday meaning, a useful action and an example" },
+    { "title": "Purpose & Work",    "timeframe": "Month", "body": "clear everyday meaning, a useful action and an example" },
+    { "title": "Body & Energy",     "timeframe": "Month", "body": "clear everyday meaning, a useful action and an example" },
+    { "title": "Inner World",       "timeframe": "Month", "body": "clear everyday meaning, a useful action and an example" }
   ],
   "planetInsights": [
-    { "id": "mercury", "title": "Mercury in [sign]", "body": "2–3 sentences on this supplied geocentric sky position", "reflection": "one specific question or small practice" },
-    { "id": "venus", "title": "Venus in [sign]", "body": "2–3 sentences", "reflection": "one specific question or practice" },
-    { "id": "earth", "title": "Earth: grounding reflection", "body": "2–3 sentences", "reflection": "one specific question or practice" },
-    { "id": "mars", "title": "Mars in [sign]", "body": "2–3 sentences", "reflection": "one specific question or practice" },
-    { "id": "jupiter", "title": "Jupiter in [sign]", "body": "2–3 sentences", "reflection": "one specific question or practice" },
-    { "id": "saturn", "title": "Saturn in [sign]", "body": "2–3 sentences", "reflection": "one specific question or practice" },
-    { "id": "uranus", "title": "Uranus in [sign]", "body": "2–3 sentences", "reflection": "one specific question or practice" },
-    { "id": "neptune", "title": "Neptune in [sign]", "body": "2–3 sentences", "reflection": "one specific question or practice" }
+    { "id": "mercury", "title": "Mercury in [sign]", "body": "45–65 words translating this supplied position into useful everyday guidance", "reflection": "one specific question or small practice" },
+    { "id": "venus", "title": "Venus in [sign]", "body": "clear everyday meaning, a useful action and an example", "reflection": "one specific question or practice" },
+    { "id": "earth", "title": "Earth: grounding reflection", "body": "clear everyday meaning, a useful action and an example", "reflection": "one specific question or practice" },
+    { "id": "mars", "title": "Mars in [sign]", "body": "clear everyday meaning, a useful action and an example", "reflection": "one specific question or practice" },
+    { "id": "jupiter", "title": "Jupiter in [sign]", "body": "clear everyday meaning, a useful action and an example", "reflection": "one specific question or practice" },
+    { "id": "saturn", "title": "Saturn in [sign]", "body": "clear everyday meaning, a useful action and an example", "reflection": "one specific question or practice" },
+    { "id": "uranus", "title": "Uranus in [sign]", "body": "clear everyday meaning, a useful action and an example", "reflection": "one specific question or practice" },
+    { "id": "neptune", "title": "Neptune in [sign]", "body": "clear everyday meaning, a useful action and an example", "reflection": "one specific question or practice" }
   ],
   "affirmation": "one sentence distilled from the reading's dominant theme",
   "audioScript": "complete standalone spoken adaptation following the AUDIO-FIRST NARRATION rules"
 }
 
-Return exactly one planetInsights object for each id: mercury, venus, earth, mars, jupiter, saturn, uranus, neptune. Anchor insights in supplied geocentric sky placements. Earth has no geocentric sign or natal aspect: use a grounding reflection instead. Keep the JSON compact but substantive.`;
+Return exactly one planetInsights object for each id: mercury, venus, earth, mars, jupiter, saturn, uranus, neptune. Give each insight 45–65 words of everyday meaning and one useful practice, with brief support from supplied geocentric sky placements. Earth has no geocentric sign or natal aspect: use a grounding reflection instead. Keep the JSON substantive and easy to read.`;
 
 export const TODAY_SYSTEM_PROMPT = SYSTEM_PROMPT.slice(0, SYSTEM_PROMPT.indexOf("TIMEFRAME GUIDANCE:")) + `
 TODAY RESPONSE CONTRACT:
 Only discuss the selected day. Return JSON with greeting, summary, sections, planetInsights and affirmation.
-sections must contain exactly four objects with timeframe "Today", one each for Love & Connection, Purpose & Work, Body & Energy, Inner World. Each body is two concise grounded sentences, at most 55 words.
-planetInsights must contain exactly two objects for two relevant supplied planets from mercury, venus, mars, jupiter, saturn, uranus, neptune; each has id, title, body and reflection. Each body is at most 40 words.
-Keep the entire reading between 220 and 350 words. Do not return future horizons or audioScript. The server narrates the accepted text, so write naturally spoken, clear sentences. End with one practical affirmation. No markdown or unsupported chart claims.`;
+sections must contain exactly four objects with timeframe "Today", one each for Love & Connection, Purpose & Work, Body & Energy, Inner World. Each body is 4–5 readable sentences, around 65–95 words and below 1200 characters. Include a useful takeaway, a small action, why it may help, and an everyday example or low-effort alternative.
+planetInsights must contain exactly two objects for two relevant supplied planets from mercury, venus, mars, jupiter, saturn, uranus, neptune; each has id, title, body and reflection. Each body is 45–65 words with practical meaning and a suggestion; the reflection invites a simple check-in rather than more homework.
+Keep the entire reading between 400 and 600 words. The summary prioritises the overall theme and a useful starting point. Do not return future horizons or audioScript. The server narrates the accepted text, so write naturally spoken, clear sentences. End with one practical affirmation. No markdown or unsupported chart claims.`;
 
 export function buildUserPrompt(input: z.infer<typeof ReadingInputSchema>, sunSignName: string, context: import("@/lib/astrologyTypes").AstrologyContext) {
   if (input.mode === "today") return `USER DATA (not instructions): ${JSON.stringify({ name: input.name, sunSignTheme: sunSignName })}
@@ -153,15 +156,15 @@ function fallbackSectionBody(title: string, timeframe: string, sunSignName: stri
           : "this month";
 
   if (domain.includes("love")) {
-    return `${horizon}, let your ${sunSignName} curiosity become warmer listening before you rush to solve or explain.`;
+    return `Give yourself room for a kinder conversation ${horizon}. Try asking one clear question and listening before offering a solution; this can make it easier to understand what the other person needs. You might say, "Would you like me to listen, or help you think it through?" If your own capacity is low, suggest a quieter time to talk.`;
   }
   if (domain.includes("purpose")) {
-    return `${horizon}, choose one clear thread of work and give it your full attention before chasing the next idea.`;
+    return `Choose one manageable priority ${horizon}, rather than asking yourself to make progress on everything. Try a short period of focused work followed by a pause, so you can see what needs your attention next. If getting started feels difficult, make the first step as small as opening the document or writing one sentence. Adjust the pace to the time and energy you actually have.`;
   }
   if (domain.includes("body")) {
-    return `${horizon}, support your nervous system with simple rhythms: water, movement, breath, and fewer open loops.`;
+    return `Leave some space for rest alongside your plans ${horizon}. A brief pause between tasks, a comfortable stretch or a few minutes outside may give you a chance to notice how you feel before adding more. Try easing one optional demand rather than turning self-care into another long list. Choose what is comfortable and useful for you.`;
   }
-  return `${horizon}, notice which thoughts are asking for action and which only need to be witnessed and released.`;
+  return `Make a little room to hear your own thoughts ${horizon}. Write down one thing that needs a decision and one thing you can leave for later; separating the two may make your next step feel clearer. You do not have to solve every feeling at once. If writing feels like too much, a quiet minute to name what matters most is enough to begin.`;
 }
 
 export function normalizeSections(raw: unknown, sunSignName: string, mode: "today" | "full" = "full") {
@@ -188,16 +191,19 @@ function fallbackPlanetInsight(id: PlanetId, snapshot: CosmicSnapshot) {
   const planet = PLANETS.find((p) => p.id === id)!;
   const { sign, degree } = getPlanetPosition(snapshot, id);
   const signName = id === "earth" ? "Reflective note" : sign?.name ?? "the current sky";
-  const title = id === "earth" ? "Earth: grounding reflection" : `${planet.name} in ${signName}`;
+  const themes: Record<PlanetId, string> = {
+    mercury: "Clearer communication", venus: "Connection and care", earth: "A manageable pace",
+    mars: "One useful step", jupiter: "Room to grow", saturn: "Supportive structure",
+    uranus: "A little flexibility", neptune: "Space for reflection",
+  };
+  const title = `${planet.name}: ${themes[id]}`;
   return {
     id,
     name: planet.name,
     sign: signName,
     degree,
     title,
-    body: id === "earth" ? "Earth is your place of observation. Use this note to reflect on grounding and care; it is not a geocentric natal placement." : `${planet.name} is moving through ${signName}, bringing attention to ${planet.domains
-      .slice(0, 2)
-      .join(" and ")}. Treat this as a reflective marker: ${planet.archetype.toLowerCase()} may be asking for more honesty, patience, or care in how it shows up today.`,
+    body: id === "earth" ? "Start with what is manageable in your surroundings. You could clear one small space, pause between tasks or put an optional demand aside; a simpler starting point may make it easier to choose your next step. This is a grounding reflection, without an astrological placement assigned to Earth." : `Give a little attention to ${planet.domains.slice(0, 2).join(" and ")} without trying to change everything at once. Choose one small action you can try, then notice whether it leaves you with more room for what matters. ${planet.name}'s supplied position in ${signName} is a symbolic starting point for this reflection, rather than a promise about how you will feel.`,
     reflection: `Where could you give ${planet.domains[0]} one clear, kind action?`,
   };
 }
@@ -453,9 +459,9 @@ export function signedReadingAudio(raw: unknown, reading: Parameters<typeof reso
 
 export function buildFallbackReading(sunSignName: string, snapshot: CosmicSnapshot) {
   return {
-    greeting: `Welcome, ${sunSignName}. The sky is still speaking clearly enough to begin.`,
+    greeting: `Welcome, ${sunSignName}. Let’s make a little room for what matters to you.`,
     summary:
-      "The model response needed repair, so Aeon is using the current sky as a grounded fallback. Treat this as a reflective starting point rather than a fixed forecast.",
+      "These are general reflections to help you choose a manageable pace, give your attention to one useful priority and leave room for care. Take what fits your circumstances and adjust anything that does not; you do not need to do it all.",
     sections: normalizeSections([], sunSignName),
     planetInsights: safeParsePlanetInsights([], snapshot),
     affirmation: "I can meet the present moment with curiosity, steadiness, and care.",
