@@ -48,3 +48,16 @@ test('section evidence cannot cite another horizon or invent calculation referen
   assert.ok(!prompt.includes('private image') && !prompt.includes('private-xml'));
   assert.match(prompt, /"capacity":"low"/);
 });
+
+test('requests for a gentle pace cannot become asserted symptoms or dietary restrictions', async () => {
+  const { generatedReading } = require('../src/lib/readingGeneration.ts');
+  const { createAstrologyService } = await import('../server/astrology.mjs');
+  const context = await createAstrologyService({ enabled: false }).prepare(null, undefined, '2026-10-15');
+  const sections = ['Love & Connection', 'Purpose & Work', 'Body & Energy', 'Inner World'].map(title => ({ title, timeframe: 'Today', body: 'If your energy is low, you could choose one small step.' }));
+  sections[2].body = 'Your body is asking for rest. Avoid caffeine or sugar for a quick lift.';
+  const reading = generatedReading({ summary: 'Your energy is low, so you must rest.', sections }, { id: 'taurus', name: 'Taurus', glyph: 'T' }, context, 'today');
+  assert.equal(reading.quality, 'partial');
+  assert.match(reading.summary, /general reflections/);
+  assert.doesNotMatch(reading.sections[2].body, /body is asking|caffeine|sugar/);
+  assert.equal(reading.sections[0].body, sections[0].body);
+});

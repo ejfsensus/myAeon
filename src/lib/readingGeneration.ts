@@ -138,10 +138,15 @@ export function insightSnapshot(context: import("@/lib/astrologyTypes").Astrolog
   return { timestamp: context.snapshots[0].at, sunLongitude: planets.find(p => p.name === "Sun")!.longitude, planets: PLANETS.map(p => ({ id: p.id, longitude: planets.find(q => q.name.toLowerCase() === p.id)?.longitude ?? 0, angleRad: 0 })) };
 }
 
+function usableGuidance(value: string) {
+  // Reading inputs contain no symptoms or dietary history. These assertions
+  // cannot be grounded in a chart or a request for gentler suggestions.
+  return !/(?:^|[.!?]\s+|\n\s*)your (?:(?:body|nervous system)\s+(?:is asking|needs|requires|demands)\b|energy is (?:low|depleted|blocked)\b)|\b(?:avoid|eliminate|cut out|give up)\s+(?:\w+\s+){0,2}(?:caffeine|sugar|medication|supplements)\b/i.test(value);
+}
 function safeParseSections(raw: unknown): Array<{ title: string; timeframe: string; body: string }> {
   if (!Array.isArray(raw)) return [];
   return raw
-    .filter((s: any) => s && typeof s.title === "string" && typeof s.timeframe === "string" && typeof s.body === "string" && s.body.trim())
+    .filter((s: any) => s && typeof s.title === "string" && typeof s.timeframe === "string" && typeof s.body === "string" && s.body.trim() && usableGuidance(s.body))
     .map((s: any) => ({
       title: String(s.title).slice(0, 80),
       timeframe: String(s.timeframe).slice(0, 40),
@@ -403,7 +408,7 @@ export async function requestReadingJson(system: string, prompt: string, signal?
       body: JSON.stringify({
         model: config.model,
         messages: [{ role: "system", content: system }, { role: "user", content: prompt }],
-        temperature: outputSchema ? 0.35 : 0.85, max_tokens: tokenLimit,
+        temperature: outputSchema ? 0.35 : 0.55, max_tokens: tokenLimit,
         ...(outputSchema ? {
           tools: [{ type: "function", function: { name: "emit_chart_reading", description: "Return the complete chart-aware reading as structured data. This function executes no external action.", strict: true, parameters: outputSchema } }],
           tool_choice: { type: "function", function: { name: "emit_chart_reading" } },
@@ -438,7 +443,7 @@ export async function requestReadingJson(system: string, prompt: string, signal?
 }
 
 function modelText(value: unknown, fallback: string, max: number) {
-  return typeof value === "string" && value.trim() ? value.trim().slice(0, max) : fallback;
+  return typeof value === "string" && value.trim() && usableGuidance(value) ? value.trim().slice(0, max) : fallback;
 }
 
 export function generatedReading(raw: unknown, sunSign: { id: string; name: string; glyph: string }, context: import("@/lib/astrologyTypes").AstrologyContext, mode: "today" | "full" = "full") {
@@ -453,7 +458,7 @@ export function generatedReading(raw: unknown, sunSign: { id: string; name: stri
     summary: modelText(parsed.summary, fallback.summary, 600),
     sections: normalizeSections(parsed.sections, sunSign.name, mode).map(section => {
       const allowed = context.synthesis?.sections.find(s => s.title === section.title && s.timeframe === section.timeframe)?.evidenceIds ?? [];
-      const rawSection = Array.isArray(parsed.sections) ? parsed.sections.find((s: any) => s?.title === section.title && s?.timeframe === section.timeframe) as { evidenceIds?: unknown } | undefined : undefined;
+      const rawSection = Array.isArray(parsed.sections) ? parsed.sections.find((s: any) => s?.title === section.title && s?.timeframe === section.timeframe && typeof s?.body === 'string' && usableGuidance(s.body)) as { evidenceIds?: unknown } | undefined : undefined;
       const evidenceIds = Array.isArray(rawSection?.evidenceIds) ? [...new Set(rawSection.evidenceIds.filter((id): id is string => typeof id === 'string' && allowed.includes(id)))].slice(0, 5) : [];
       return { ...section, ...(evidenceIds.length ? { evidenceIds } : {}) };
     }),
