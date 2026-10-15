@@ -11,6 +11,7 @@ is a reflective practice, not deterministic prediction.
 - Locally calculated natal and transit wheels, rendered as SVG textures in 3D.
 - Birth date, time, time confidence, confirmed coordinates and IANA timezone.
 - Today, three-day, weekly and monthly readings across four life domains.
+- Independent birth profiles: Standard or Deep analysis across eight personal themes, with supporting natal facts and a standalone PDF.
 - Optional birth-chart interpretation, standalone or enhancing a reading.
 - Designed PDF with all reading sections, planetary reflections and chart pages.
 - Streamed listening, downloadable narration and additional birth-chart insight.
@@ -119,3 +120,21 @@ or network availability. Non-commercial use does not automatically remove AGPL
 source obligations. Switching to a paid hosted service later does not resolve
 obligations of earlier self-hosted releases. This is a technical notice, not legal
 advice.
+
+## Independent birth profiles
+
+In **Birth chart → Birth profile**, choose **Standard** or **Deep analysis**, then generate. No daily/full reading is needed. The separate request uses only verified natal evidence and a dedicated prompt in `src/lib/natalProfile.ts`. It covers personality, interests/learning, believed strengths, communication, emotional needs, relationships, motivation and growth. Deep mode requests a fuller synthesis of interacting placements, tensions and practical examples.
+
+- Generation: `POST /api/astrology/natal-profile` with `{contextId, depth: "standard" | "deep"}`.
+- Export: `POST /api/astrology/natal-profile/pdf` with `{reportId}`. Exports resolve an immutable owner-scoped saved report; they do not accept client prose or call the model.
+- Standard and deep reports are separate. Switching workspace or sky date preserves them; changing birth details clears them. Reopening the app requires recalculating the chart and requesting the report again.
+- Profile requests reuse a cached result for the same confirmed profile, depth, model and prompt version. Concurrent duplicates are blocked. Temporary cache retention is at most 24 hours, limited to 64 reports / 32 MiB, and is lost on restart or eviction. Keep one server replica, as with the existing chart cache. Download the PDF for a permanent copy.
+- Estimated times omit houses, angles and the natal wheel. Unknown times cannot generate a natal profile. The report presents astrological beliefs as reflective possibilities, never established personality findings.
+
+### Model configuration
+
+Set `DEEPSEEK_API_KEY` and **`DEEPSEEK_MODEL=deepseek-v4-pro`** on the server. This is the code default and `.env.example` value, already present in the inspected main branch; an older deployment-level override must be updated explicitly. Both written readings and the independent profile use this shared configuration. `DEEPSEEK_TIMEOUT_MS` defaults to 120000. Standard/deep profile requests have 5000/8500 output-token budgets and explicit non-thinking structured output for reliable complete JSON. Deep analysis means fuller interpretive coverage, not exposing hidden reasoning.
+
+Zeus's separately managed Deepgram voice-agent thinking provider remains its existing `claude-sonnet-4-6` configuration; this feature changes neither speech recognition nor narration.
+
+Plan: [docs/birth-profile-implementation-plan.md](docs/birth-profile-implementation-plan.md). Verification and delivery notes: [docs/birth-profile-verification.md](docs/birth-profile-verification.md).

@@ -1,5 +1,8 @@
 "use client";
 
+import Modal from "./Modal";
+import NatalProfilePanel from "./NatalProfilePanel";
+import type { NatalProfileControls } from "./useNatalProfile";
 import ChartWheel from "./ChartWheel";
 import dynamic from "next/dynamic";
 import { useCallback, useState } from "react";
@@ -10,12 +13,14 @@ import { chartHouseLabel, chartPointLabel, type ChartContext, type ChartEnhancem
 const BirthChartScene = dynamic(() => import("../scene/BirthChartScene"), { ssr: false });
 
 type Props = ChartEnhancementProps & {
+  natalProfile?: NatalProfileControls;
   context: ChartContext | null; theme: ThemeMode; loading: boolean; error: string | null;
   timeConfidence: "known" | "estimated" | "unknown"; confirmed: boolean;
   onExplain?: (name: string, frame: "natal" | "transit") => void; hasReading: boolean; enhanced: boolean; onCalculate: () => void; onEditDetails: () => void;
 };
 
-export default function BirthChartView({ context, theme, loading, error, timeConfidence, confirmed, hasReading, enhanced, onCalculate, onEditDetails, onEnhanceChart, enhancingChart, enhancementError, onExplain }: Props) {
+export default function BirthChartView({ natalProfile, context, theme, loading, error, timeConfidence, confirmed, hasReading, enhanced, onCalculate, onEditDetails, onEnhanceChart, enhancingChart, enhancementError, onExplain }: Props) {
+  const [profileOpen, setProfileOpen] = useState(false);
   const [mode, setMode] = useState<"natal" | "transit">("natal");
   const [flat, setFlat] = useState(true);
   const [reference, setReference] = useState(false);
@@ -59,6 +64,7 @@ export default function BirthChartView({ context, theme, loading, error, timeCon
     </div>
 
     <div className="chart-inspector">
+      {natalProfile && <button type="button" className="mb-3 flex min-h-11 w-full items-center justify-center gap-2 rounded-lg border border-[var(--panel-border)] px-3 text-sm text-astral-cyan" onClick={() => setProfileOpen(true)}><Sparkles size={16} />Birth profile{natalProfile.busy ? " · Preparing…" : ""}</button>}
       {svg && <button className="chart-reference-toggle" onClick={() => setReference(v => !v)}>{reference ? 'Interactive chart' : 'Original wheel'}</button>}
       {point && <div className="mb-2">
         <div className="flex items-center justify-between gap-2">
@@ -79,5 +85,6 @@ export default function BirthChartView({ context, theme, loading, error, timeCon
       </button>}
       {enhancementError && <p role="alert" className="mt-2 text-xs leading-5 text-red-400">{enhancementError}</p>}
     </div>
+    {profileOpen && natalProfile && <Modal title="Your birth profile" onClose={() => setProfileOpen(false)}><NatalProfilePanel controls={natalProfile} available={available && !loading} onRecalculate={confirmed ? onCalculate : () => { setProfileOpen(false); onEditDetails(); }} chartLoading={loading} /></Modal>}
   </section>;
 }

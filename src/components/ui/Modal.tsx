@@ -16,7 +16,7 @@ export default function Modal({
     return () => previous?.focus();
   }, []);
   return (
-    <div className="aeon-modal-backdrop" onClick={onClose}>
+    <div className="aeon-modal-backdrop pointer-events-auto" onClick={onClose}>
       <div
         ref={ref}
         role="dialog"
@@ -45,7 +45,7 @@ export default function Modal({
       >
         <header>
           <h2>{title}</h2>
-          <button onClick={onClose} aria-label="Close birth details">
+          <button onClick={onClose} aria-label={`Close ${title.toLowerCase()}`}>
             ✕
           </button>
         </header>

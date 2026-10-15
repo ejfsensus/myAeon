@@ -21,6 +21,7 @@ import ReadingPanel from "@/components/ui/ReadingPanel";
 import PlanetTooltip from "@/components/ui/PlanetTooltip";
 import HowItWorksModal from "@/components/ui/HowItWorksModal";
 import QuickTour from "@/components/ui/QuickTour";
+import { useNatalProfile } from "@/components/ui/useNatalProfile";
 import BirthChartView from "@/components/ui/BirthChartView";
 import {
   publicMessage,
@@ -119,6 +120,7 @@ export default function Home({ initialDate }: { initialDate: string }) {
   const readingRequest = useRef<AbortController | null>(null);
   const enhanceRequest = useRef<AbortController | null>(null);
   const currentChart = chart?.key === inputKey ? chart.context : null;
+  const natalProfile = useNatalProfile(fingerprint, currentChart?.id);
   const profileId =
     confirmedProfile?.fingerprint === fingerprint
       ? confirmedProfile.id
@@ -137,10 +139,10 @@ export default function Home({ initialDate }: { initialDate: string }) {
     void refreshUsage();
   }, [refreshUsage]);
   const confirmProfile = useCallback(
-    async (input: BirthInput) => {
+    async (input: BirthInput, force = false) => {
       if (!input.confirmed)
         throw new Error("Confirm permission to use these birth details first.");
-      if (confirmedProfile?.fingerprint === profileFingerprint(input))
+      if (!force && confirmedProfile?.fingerprint === profileFingerprint(input))
         return confirmedProfile.id;
       const response = await fetch("/api/astrology/profile", {
         method: "POST",
@@ -264,9 +266,9 @@ export default function Home({ initialDate }: { initialDate: string }) {
   );
 
   const fetchChart = useCallback(
-    async (input: BirthInput, confirmedId: string) => {
+    async (input: BirthInput, confirmedId: string, force = false) => {
       const key = readingFingerprint(input);
-      if (currentKey.current !== key || chart?.key === key) return;
+      if (currentKey.current !== key || (!force && chart?.key === key)) return;
       chartRequest.current?.abort();
       const controller = new AbortController();
       chartRequest.current = controller;
@@ -315,8 +317,8 @@ export default function Home({ initialDate }: { initialDate: string }) {
     setChartError(null);
     setChartLoading(true);
     try {
-      const id = await confirmProfile(input);
-      await fetchChart(input, id);
+      const id = await confirmProfile(input, true);
+      await fetchChart(input, id, true);
     } catch (err) {
       if (latestInput.current === input)
         setChartError(
@@ -767,6 +769,7 @@ export default function Home({ initialDate }: { initialDate: string }) {
           <BirthChartView
             key={inputKey}
             context={currentChart}
+            natalProfile={natalProfile}
             theme={theme}
             loading={chartLoading}
             error={chartError}
