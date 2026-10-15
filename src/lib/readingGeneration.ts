@@ -468,7 +468,7 @@ export function generatedReading(raw: unknown, sunSign: { id: string; name: stri
 }
 
 export function signedReadingAudio(raw: unknown, reading: Parameters<typeof resolveAudioScript>[1]) {
-  const audioScript = resolveAudioScript(raw, reading);
+  const audioScript = resolveAudioScript(typeof raw === 'string' && !usableGuidance(raw) ? undefined : raw, reading);
   return { audioScript, audioAuthorization: authorizeAudio(audioScript) };
 }
 

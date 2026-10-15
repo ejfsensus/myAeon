@@ -50,7 +50,7 @@ test('section evidence cannot cite another horizon or invent calculation referen
 });
 
 test('requests for a gentle pace cannot become asserted symptoms or dietary restrictions', async () => {
-  const { generatedReading } = require('../src/lib/readingGeneration.ts');
+  const { generatedReading, signedReadingAudio } = require('../src/lib/readingGeneration.ts');
   const { createAstrologyService } = await import('../server/astrology.mjs');
   const context = await createAstrologyService({ enabled: false }).prepare(null, undefined, '2026-10-15');
   const sections = ['Love & Connection', 'Purpose & Work', 'Body & Energy', 'Inner World'].map(title => ({ title, timeframe: 'Today', body: 'If your energy is low, you could choose one small step.' }));
@@ -60,4 +60,7 @@ test('requests for a gentle pace cannot become asserted symptoms or dietary rest
   assert.match(reading.summary, /general reflections/);
   assert.doesNotMatch(reading.sections[2].body, /body is asking|caffeine|sugar/);
   assert.equal(reading.sections[0].body, sections[0].body);
+  const spoken = signedReadingAudio('Your body is asking for rest. Avoid caffeine or sugar. '.repeat(4), reading);
+  assert.doesNotMatch(spoken.audioScript, /body is asking|caffeine|sugar/);
+  assert.ok(spoken.audioScript.includes(sections[0].body));
 });
