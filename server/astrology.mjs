@@ -4,6 +4,7 @@ import { anchors, dateSchema, LONDON, localInstant, validateProfile, wallParts }
 import { AstrologyError, digest } from './astrology-quota.mjs';
 import { calculateCharts, ENGINE_BACKEND, KERYKEION_VERSION } from './kerykeion-bridge.mjs';
 import { skyAt, moonAt } from './sky.mjs';
+import { birthSunFoundation, buildReadingSynthesis } from './reading-synthesis.mjs';
 
 export const SETTINGS = Object.freeze({ zodiac: 'Tropical', frame: 'Apparent Geocentric', houses: 'Placidus', apiVersion: 'v6' });
 const SIGNS = ['Aries', 'Taurus', 'Gemini', 'Cancer', 'Leo', 'Virgo', 'Libra', 'Scorpio', 'Sagittarius', 'Capricorn', 'Aquarius', 'Pisces'];
@@ -179,6 +180,8 @@ export function createAstrologyService(options = {}) {
     result.source = result.natal ? 'Kerykeion' : 'astronomy-engine';
     limitations.push('Dated anchors at 12:00 Europe/London are snapshots, not exact event times. The 3D scene is heliocentric; chart facts are geocentric.');
     result.limitations = [...new Set(limitations)];
+    result.synthesis = buildReadingSynthesis(result);
+    if (profile) result.sunFoundation = birthSunFoundation(profile.birthDate, profile, result);
     result.usage = null;
     if (owner) put(contexts, result.id, { owner, data: structuredClone(result) });
     return result;
@@ -188,4 +191,4 @@ export function createAstrologyService(options = {}) {
 // Next's route bundle and the custom voice server share the same process store.
 const key = Symbol.for('myAeon.astrology.local.v6');
 export const astrology = globalThis[key] ||= createAstrologyService();
-export function contextMetadata(context) { return { contextId: context.serverOwned ? context.id : undefined, source: context.source, frame: context.settings.frame, confidence: context.confidence, natalSummary: context.natal ? [...context.natal.planets.filter(p => ['Sun', 'Moon'].includes(p.name)), ...context.natal.angles.filter(p => ['Ascendant', 'Medium_Coeli'].includes(p.name))] : [], computedAt: context.computedAt, targetTimezone: context.targetTimezone, limitations: context.limitations, usage: null, ...(context.engine ? { engine: context.engine } : {}) }; }
+export function contextMetadata(context) { return { contextId: context.serverOwned ? context.id : undefined, source: context.source, frame: context.settings.frame, confidence: context.confidence, synthesis: context.synthesis, sunFoundation: context.sunFoundation, natalSummary: context.natal ? [...context.natal.planets.filter(p => ['Sun', 'Moon'].includes(p.name)), ...context.natal.angles.filter(p => ['Ascendant', 'Medium_Coeli'].includes(p.name))] : [], computedAt: context.computedAt, targetTimezone: context.targetTimezone, limitations: context.limitations, usage: null, ...(context.engine ? { engine: context.engine } : {}) }; }

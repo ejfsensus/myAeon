@@ -13,11 +13,33 @@ const pdfRoute = require('../src/app/api/reading/pdf/route.ts');
 const origin = 'http://localhost';
 function request(route, body, cookie) { return new Request(`${origin}${route}`, { method: 'POST', headers: { Origin: origin, 'Content-Type': 'application/json', ...(cookie ? { Cookie: cookie } : {}) }, body: JSON.stringify(body) }); }
 
-test('confirmed profile stays sky-only: no hosted charts, four geocentric horizons, verified metadata and PDF', async t => {
+test('an unknown-time cusp retains both Sun possibilities in the accepted reading and PDF', async t => {
+  const originalFetch = global.fetch, previousEnv = { ...process.env };
+  Object.assign(process.env, { ASTROLOGY_SESSION_SECRET: 'synthetic-cusp-session-at-least-32-characters', DEEPSEEK_API_KEY: 'synthetic-key' });
+  global.fetch = async () => Response.json({ choices: [{ message: { content: '{"summary":"A gentle reflection with an uncertain Sun sign."}' } }] });
+  t.after(() => { global.fetch = originalFetch; process.env = previousEnv; });
+  const profile = await profileRoute.POST(request('/api/astrology/profile', { birthDate: '2026-03-20', timeConfidence: 'unknown', confirmed: true, providerConsent: true }));
+  const cookie = profile.headers.get('set-cookie'), { profileId } = await profile.json();
+  const response = await readingRoute.POST(request('/api/reading', { birthDate: '2026-03-20', profileId, readingDate: '2026-10-15', mode: 'today' }, cookie));
+  assert.equal(response.status, 200);
+  const reading = await response.json();
+  assert.equal(reading.sunSign.name, 'Pisces / Aries');
+  assert.equal(reading.meta.astrology.sunFoundation.uncertain, true);
+  const pdf = await pdfRoute.POST(request('/api/reading/pdf', { reading }, cookie));
+  assert.equal(pdf.status, 200);
+  assert.match(pdf.headers.get('content-disposition'), /pisces.*aries/i);
+});
+
+test('confirmed profile integrates natal facts, lunar evidence and preferences in one reading and PDF', async t => {
   const previousEnv = { ...process.env }, originalFetch = global.fetch;
   Object.assign(process.env, { ASTROLOGY_SESSION_SECRET: 'synthetic-secret-at-least-32-characters', DEEPSEEK_API_KEY: 'synthetic-deepseek' });
   const { knownProfile } = await import('./fixtures/astrologer.mjs');
-  const { astrology } = await import('../server/astrology.mjs');
+  const { astrology, createAstrologyService } = await import('../server/astrology.mjs');
+  const { localWorkerFixture } = await import('./fixtures/kerykeion.mjs');
+  const service = createAstrologyService({ enabled: true, worker: async job => localWorkerFixture(job) });
+  const previousMethods = { ...astrology };
+  Object.assign(astrology, service);
+  t.after(() => Object.assign(astrology, previousMethods));
   const { userIdentity } = await import('../server/astrology-quota.mjs');
   const prepare = astrology.prepare, prepareCalls = [];
   astrology.prepare = (...args) => { prepareCalls.push(args); return prepare(...args); };
@@ -28,27 +50,33 @@ test('confirmed profile stays sky-only: no hosted charts, four geocentric horizo
     readingCalls++;
     const payload = JSON.parse(args.body), marker = 'VALIDATED COMPUTATION DATA: ';
     lastEvidence = JSON.parse(payload.messages[1].content.split(marker)[1].split('\n')[0]);
-    assert.equal(lastEvidence.natal, null);
+    assert.ok(lastEvidence.natal.planets.length);
+    assert.equal(lastEvidence.sunFoundation.basis, 'verified-natal');
+    assert.ok(lastEvidence.synthesis.evidence.some(e => e.kind === 'lunar-phase'));
+    assert.equal(lastEvidence.charts, undefined);
+    assert.equal(lastEvidence.chartContext, undefined);
     assert.equal(lastEvidence.snapshots.length, 4);
-    assert.ok(lastEvidence.snapshots.every(snapshot => snapshot.natalAspects.length === 0));
+    assert.ok(lastEvidence.snapshots.every(snapshot => snapshot.natalAspects.length > 0));
     assert.ok(payload.messages[0].content.includes('geocentric'));
-    assert.ok(payload.messages[1].content.includes('baseline four-horizon sky reading'));
+    assert.ok(payload.messages[1].content.includes('one integrated four-horizon reading'));
     return Response.json({ choices: [{ message: { content: JSON.stringify({ greeting: 'Welcome.', summary: 'A sky reflection.', sections: [], planetInsights: [], affirmation: 'I make thoughtful choices.' }) } }] });
   };
   const profile = await profileRoute.POST(request('/api/astrology/profile', knownProfile));
   assert.equal(profile.status, 200);
   const cookie = profile.headers.get('set-cookie'), { profileId } = await profile.json();
-  const input = { birthDate: knownProfile.birthDate, birthTime: knownProfile.birthTime, birthPlace: 'Unverified client place', readingDate: '2026-10-09', profileId };
+  const input = { birthDate: knownProfile.birthDate, birthTime: knownProfile.birthTime, birthPlace: 'Unverified client place', readingDate: '2026-10-09', profileId, preferences: { focus: 'rest', capacity: 'low' } };
   const response = await readingRoute.POST(request('/api/reading', input, cookie));
   assert.equal(response.status, 200); const reading = await response.json();
   assert.equal(response.headers.get('cache-control'), 'private, no-store');
   assert.equal(providerCalls, 0); assert.equal(readingCalls, 1);
-  assert.equal(prepareCalls[0][1], undefined, 'profile must not reach baseline calculation');
+  assert.equal(prepareCalls[0][1], profileId, 'confirmed profile informs the standard reading');
   assert.equal(prepareCalls[0][3], true);
   assert.equal(reading.sections.length, 16); assert.equal(reading.planetInsights.length, 8);
   assert.equal(reading.birthChart, undefined);
   assert.equal(reading.meta.profileId, profileId);
-  assert.equal(reading.meta.astrology.source, 'astronomy-engine'); assert.equal(reading.meta.astrology.usage, null);
+  assert.equal(reading.meta.astrology.source, 'Kerykeion');
+  assert.deepEqual(reading.meta.preferences, { focus: 'rest', capacity: 'low' });
+  assert.ok(reading.meta.astrology.synthesis.sections.every(s => s.evidenceIds.length <= 5)); assert.equal(reading.meta.astrology.usage, null);
   assert.equal(reading.meta.birthTime, '10:15'); assert.equal(reading.meta.birthPlace, 'London, GB');
   const earth = reading.planetInsights.find(p => p.id === 'earth');
   assert.equal(earth.sign, 'Reflective note'); assert.ok(!/Earth in /.test(earth.title));

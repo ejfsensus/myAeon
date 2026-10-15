@@ -502,7 +502,11 @@ export async function POST(req: Request) {
       }
       const natalSun = context.natal?.planets.find(point => point.name === "Sun");
       const sunSign = natalSun ? longitudeToSign(natalSun.longitude) : profile ? getSunSign(new Date(`${profile.birthDate}T12:00:00Z`)) : null;
-      if (sunSign) reading.sunSign = { id: sunSign.id, name: sunSign.name, symbol: sunSign.glyph };
+      const foundation = context.sunFoundation;
+      if (foundation?.signs.length) {
+        const base = longitudeToSign(foundation.longitude);
+        reading.sunSign = foundation.signs.length > 1 ? { id: 'uncertain', name: foundation.signs.join(' / '), symbol: '☉' } : { id: base.id, name: base.name, symbol: base.glyph };
+      } else if (sunSign) reading.sunSign = { id: sunSign.id, name: sunSign.name, symbol: sunSign.glyph };
       reading.meta.readingDate = context.selectedDate;
       provenance = [
         context.natal ? "Chart source: verified server-owned calculation" : "Sky source: locally computed geocentric snapshots",

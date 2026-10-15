@@ -54,6 +54,7 @@ function harness() {
   };
   let tree;
   act(() => { tree = create(React.createElement(Home, { initialDate:'2026-10-10' })); });
+  act(() => tree.root.findByType('mock-AeonPreloader').props.onComplete());
   const nav = label => act(() => tree.root.findAllByType('nav')[0].findAllByType('button').find(b => b.children.includes(label)).props.onClick());
   const props = name => {
     if(name === 'ControlPanel') { name='BirthDetailsForm'; if(!tree.root.findAllByType('mock-BirthDetailsForm').length) act(()=>tree.root.findAllByType('button').find(b=>b.children.includes('Birth details ')).props.onClick()); }

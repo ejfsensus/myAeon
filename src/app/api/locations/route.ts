@@ -2,7 +2,7 @@ import { NextResponse } from "next/server";
 const cache = new Map<string, { at: number; locations: unknown[] }>();
 export async function GET(req: Request) {
   const query = new URL(req.url).searchParams.get("q")?.trim() ?? "";
-  if (query.length < 3 || query.length > 100)
+  if (query.length < 2 || query.length > 100)
     return NextResponse.json({ locations: [] });
   const cached = cache.get(query.toLowerCase());
   if (cached && Date.now() - cached.at < 3600000)
@@ -16,7 +16,7 @@ export async function GET(req: Request) {
     );
     endpoint.search = new URLSearchParams({
       name: query,
-      count: "6",
+      count: "10",
       language: "en",
       format: "json",
       ...(process.env.OPEN_METEO_API_KEY
@@ -44,6 +44,7 @@ export async function GET(req: Request) {
         longitude: p.longitude,
         timezone: p.timezone,
         region: p.admin1 ?? "",
+        country: p.country ?? p.country_code,
       }));
     if (cache.size >= 100) cache.delete(cache.keys().next().value!);
     cache.set(query.toLowerCase(), { at: Date.now(), locations });
@@ -52,7 +53,7 @@ export async function GET(req: Request) {
     return NextResponse.json(
       {
         error:
-          "Place search is unavailable. Enter coordinates and timezone below.",
+          "Place search is unavailable. Try again, or open manual location details below.",
       },
       { status: 503 },
     );

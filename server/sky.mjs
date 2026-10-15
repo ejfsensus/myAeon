@@ -1,6 +1,7 @@
 import { createRequire } from 'node:module';
 const { Body, GeoVector, Ecliptic, MoonPhase } = createRequire(import.meta.url)('astronomy-engine');
 const signs = ['Aries', 'Taurus', 'Gemini', 'Cancer', 'Leo', 'Virgo', 'Libra', 'Scorpio', 'Sagittarius', 'Capricorn', 'Aquarius', 'Pisces'];
+export function sunLongitudeAt(instant) { return Ecliptic(GeoVector(Body.Sun, instant, true)).elon; }
 export function skyAt(instant = new Date()) {
   const bodies = ['Sun', 'Moon', 'Mercury', 'Venus', 'Mars', 'Jupiter', 'Saturn', 'Uranus', 'Neptune'];
   const planets = bodies.map(name => {
@@ -11,7 +12,7 @@ export function skyAt(instant = new Date()) {
   for (let i = 0; i < planets.length; i++) for (let j = i + 1; j < planets.length; j++) {
     const separation = Math.abs(((planets[i].longitude - planets[j].longitude + 540) % 360) - 180);
     for (const [angle, name] of [[0, 'conjunction'], [60, 'sextile'], [90, 'square'], [120, 'trine'], [180, 'opposition']]) {
-      if (Math.abs(separation - angle) <= 6) aspects.push({ planets: [planets[i].name, planets[j].name], aspect: name, orb: +Math.abs(separation - angle).toFixed(2) });
+      if (Math.abs(separation - angle) <= 6) aspects.push({ first: planets[i].name, second: planets[j].name, planets: [planets[i].name, planets[j].name], aspect: name, orb: +Math.abs(separation - angle).toFixed(2) });
     }
   }
   return { at: instant.toISOString(), frame: 'Geocentric tropical ecliptic longitude; astronomy-engine, aberration corrected', planets, aspects };

@@ -5,11 +5,16 @@ export type ChartPoint = { name: string; longitude: number; sign: string; degree
 export type ChartAspect = { natal?: string; transit?: string; first?: string; second?: string; aspect: string; orb: number; source?: string };
 export type AstrologyCharts = { natal: { dark: string; light: string }; transit: { dark: string; light: string } };
 export type AstrologyEngine = { name: string; version: string; backend: string };
+export type ReadingPreferences = { focus?: 'connection' | 'work' | 'rest' | 'inner'; capacity?: 'low' | 'steady' | 'full' };
+export type SunFoundation = { basis: 'verified-natal' | 'estimated-natal' | 'birth-day-range'; source: string; signs: string[]; longitude: number; at?: string; interval?: { start: string; end: string }; uncertain: boolean };
+export type ReadingEvidence = { id: string; kind: string; at: string; source: string; confidence: string; facts: Record<string, unknown>; domains: string[]; timeframe?: string };
+export type ReadingSynthesis = { version: number; lens: string; settings: AstrologyContext['settings']; evidence: ReadingEvidence[]; sections: Array<{ title: string; timeframe: string; date: string; evidenceIds: string[] }>; rules: string[] };
 export type AstrologyContext = {
   id: string; profileId?: string; serverOwned?: boolean; source: string; settings: { zodiac: string; frame: string; houses: string; apiVersion: string }; computedAt: string;
   selectedDate: string; targetTimezone: string; confidence: string; limitations: string[]; usage: AstrologyUsage | null;
   charts?: AstrologyCharts; chartContext?: string; engine?: AstrologyEngine;
+  synthesis?: ReadingSynthesis; sunFoundation?: SunFoundation;
   natal: { planets: ChartPoint[]; angles: ChartPoint[]; houses: Array<ChartPoint & { number: number }>; aspects: ChartAspect[]; at: string; source: string } | null;
   snapshots: Array<{ label: string; date: string; at: string; source: string; planets: ChartPoint[]; aspects: ChartAspect[]; natalAspects: ChartAspect[]; moon: { at: string; source: string; angle: number; illumination: number; phaseName: string } }>;
 };
-export type AstrologyMetadata = Pick<AstrologyContext, 'source' | 'confidence' | 'computedAt' | 'targetTimezone' | 'limitations' | 'usage' | 'engine'> & { contextId?: string; frame: string; natalSummary?: ChartPoint[] };
+export type AstrologyMetadata = Pick<AstrologyContext, 'source' | 'confidence' | 'computedAt' | 'targetTimezone' | 'limitations' | 'usage' | 'engine' | 'synthesis' | 'sunFoundation'> & { contextId?: string; frame: string; natalSummary?: ChartPoint[] };

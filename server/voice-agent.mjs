@@ -14,12 +14,11 @@ export function createVoiceAgent(options = {}) {
     if (artifact && artifact.reading.meta?.readingDate === context.viewedDate) {
       context = { ...context, reading: contextSchema.shape.reading.parse(artifact.reading) };
     }
-    let data;
-    if (owner && context.contextId) {
+    let data = artifact?.context?.selectedDate === context.viewedDate ? artifact.context : null;
+    if (!data && owner && context.contextId) {
       try { data = service.resolveContext(owner, context.contextId); } catch { data = null; }
       if (data && (data.selectedDate !== context.viewedDate || (context.profileId && data.profileId !== context.profileId))) data = null;
     }
-    if (!data && artifact?.context?.selectedDate === context.viewedDate && artifact.context.natal) data = artifact.context;
     let profileId = context.profileId;
     if (!data) {
       try { data = await service.prepare(owner, profileId, context.viewedDate, false, signal); }

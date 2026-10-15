@@ -30,7 +30,7 @@ Birth details and personalisation
 
 People enter a birth date, birthplace and their confidence in the birth time: known, estimated or unknown. Place search fills coordinates and timezone; advanced coordinate entry is also available. Permission to use the details is confirmed explicitly.
 
-The basic reading combines a broad Sun-sign theme with the calculated sky. A personal natal interpretation is a separate, explicit step. A known birth time supports the full chart, houses and angles. An estimated time gives approximate placements while omitting houses, angles and the full wheel. Unknown time supports a limited sky reading without fabricated natal Moon, Ascendant, houses or exact natal aspects.
+A standard reading integrates available verified natal patterns, the calculated sky and lunar phase. A more detailed natal report remains an optional, separate step. A known birth time supports the full chart, houses and angles. An estimated time gives approximate placements while omitting houses, angles and the full wheel. Unknown time supports a limited sky reading without fabricated natal Moon, Ascendant, houses or exact natal aspects.
 
 Birth-chart exploration and interpretation
 
@@ -71,3 +71,13 @@ Selected-day sky snapshots use noon in Europe/London. The four horizons are date
 Birth-chart calculations run on the app’s server. Reading text is generated remotely, and speech, messages and selected context are processed by remote providers when those features are used. Provider credentials stay on the server.
 
 Reading and audio snapshots are temporary, bounded server caches. They can expire or disappear after a restart, so myAeon does not currently promise permanent reading history or long-term conversation memory. Download the PDF or audio to keep a personal copy.
+
+PHASE 1 READING IMPROVEMENTS (15 OCTOBER 2026)
+
+A standard reading now integrates available verified natal patterns, the selected geocentric sky and lunar phase. Users can optionally select a focus and how much capacity they have; guidance adapts its examples and suggested effort while keeping the four familiar life areas. These choices are carried into contextual Zeus conversations.
+
+The Sun foundation prefers the calculated natal Sun. Without a reliable birth time, the application checks the possible birth-day interval in the birthplace timezone and preserves uncertainty when it crosses a sign boundary. Lunar phases offer optional reflective prompts rather than predictions of mood or exact lunation times.
+
+Birthplace search supplies coordinates and timezone automatically. Manual entry remains available for missing places. Starting a reading confirms consented details automatically; a separate confirmation is available for talking to Zeus before generating a reading. The opening experience is a soft myAeon wordmark fade on a navy background.
+
+Each reading retains a bounded ledger of relevant calculation evidence and source settings. This supports explanation and consistent exports without introducing another tradition or a permanent reading history.

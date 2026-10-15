@@ -28,7 +28,7 @@ export default function PrivacyPage() {
     <article className="mx-auto max-w-3xl px-5 py-8 text-sm leading-7 md:text-base">
       <Link href="/" className="mb-7 inline-flex min-h-11 items-center gap-2 text-sm text-astral-cyan"><ArrowLeft size={16} />Back to myAeon</Link>
       <h1 className="text-3xl font-medium">Privacy policy</h1>
-      <p className="mt-2 mb-8 text-sm opacity-70">Effective date: 10 October 2026</p>
+      <p className="mt-2 mb-8 text-sm opacity-70">Effective date: 15 October 2026</p>
       <div className="space-y-7">
         <Section title="What this policy covers">
           <p>This policy describes the data handled by this myAeon application and the external services it uses. Birth details can identify you. Do not enter anyone else&apos;s details without their permission, and avoid sharing sensitive information in a voice conversation. AI-generated astrology is for reflection, not professional advice.</p>
@@ -38,7 +38,7 @@ export default function PrivacyPage() {
           <p>Charts are computed locally on the application server using Kerykeion and its ephemeris runtime. This does not mean calculation happens on your device: your birth details reach the app server. Chart calculation alone does not send those details to a hosted astrology service or generate an AI interpretation. A full wheel is provided only for a known, recorded birth time; estimated and unknown times are treated with stated limitations.</p>
         </Section>
         <Section title="AI readings and chart interpretation">
-          <p>Casting a reading sends the submitted reading details and relevant sky information to a remote AI service. Choosing Enhance with my birth chart or Interpret birth chart additionally sends calculated natal/transit facts and, when present, your current reading for interpretation. Chart interpretation is an explicit action, separate from chart calculation.</p>
+          <p>Casting a reading sends the submitted reading details, available verified natal/transit facts, lunar phase and any optional focus or capacity preference to a remote AI service. These are integrated into one reading automatically. Choosing a separate birth-chart report sends calculated chart facts and, when present, your current reading for further interpretation. Chart calculation alone does not generate an AI reading.</p>
           <p>The configured reading provider is DeepSeek. Its handling of prompts, generated output, security records, international transfers and retention is governed by its own terms and <a href="https://cdn.deepseek.com/policies/en-US/deepseek-privacy-policy.html" className="privacy-link" target="_blank" rel="noopener noreferrer">privacy policy</a>. That policy describes processing and storage in the People&apos;s Republic of China. We do not promise that external AI services immediately delete prompts or never use them for service improvement.</p>
         </Section>
         <Section title="Listening and conversations">

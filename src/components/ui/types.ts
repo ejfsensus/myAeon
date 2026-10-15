@@ -25,6 +25,7 @@ export type ReadingPayload = {
     title: string;
     timeframe: string;
     body: string;
+    evidenceIds?: string[];
   }>;
   planetInsights?: PlanetInsight[];
   affirmation: string;
@@ -44,6 +45,7 @@ export type ReadingPayload = {
     birthTime?: string;
     birthPlace?: string;
     profileId?: string;
+    preferences?: import('@/lib/astrologyTypes').ReadingPreferences;
   };
 };
 

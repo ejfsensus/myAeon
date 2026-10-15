@@ -1,6 +1,7 @@
 "use client";
 
 import BirthDetailsForm from "@/components/ui/BirthDetailsForm";
+import AeonPreloader from "@/components/ui/AeonPreloader";
 import WelcomeScreen from "@/components/ui/WelcomeScreen";
 import Modal from "@/components/ui/Modal";
 import { PLANETS, getSunSign } from "@/lib/zodiac";
@@ -13,6 +14,7 @@ import {
   londonToday,
   birthProfile,
   profileFingerprint,
+  readingFingerprint,
 } from "@/components/ui/BirthDetailsForm";
 import type { AstrologyUsage } from "@/lib/astrologyTypes";
 import ReadingPanel from "@/components/ui/ReadingPanel";
@@ -108,7 +110,7 @@ export default function Home({ initialDate }: { initialDate: string }) {
   const [enhancingChart, setEnhancingChart] = useState(false);
   const [enhancementError, setEnhancementError] = useState<string | null>(null);
   const fingerprint = profileFingerprint(birthInput);
-  const inputKey = `${fingerprint}|${birthInput.readingDate}`;
+  const inputKey = readingFingerprint(birthInput);
   const currentKey = useRef(inputKey);
   currentKey.current = inputKey;
   const latestInput = useRef(birthInput);
@@ -203,7 +205,7 @@ export default function Home({ initialDate }: { initialDate: string }) {
   const [theme, setTheme] = useState<ThemeMode>("dark");
   const [themeReady, setThemeReady] = useState(false);
   const [isMobile, setIsMobile] = useState(false);
-  const [sceneReady, setSceneReady] = useState(false);
+  const [introComplete, setIntroComplete] = useState(false);
   const [voiceOpen, setVoiceOpen] = useState(false);
   const [zeusSource, setZeusSource] = useState<ZeusSource>("welcome");
   const [zeusReadingFocus, setZeusReadingFocus] = useState<ZeusReadingFocus | null>(null);
@@ -231,7 +233,7 @@ export default function Home({ initialDate }: { initialDate: string }) {
   }, []);
   const skyDate = birthInput.readingDate;
   const changeBirthInput = useCallback((input: BirthInput) => {
-    const nextKey = `${profileFingerprint(input)}|${input.readingDate}`;
+    const nextKey = readingFingerprint(input);
     if (nextKey !== currentKey.current) {
       currentKey.current = nextKey;
       chartRequest.current?.abort();
@@ -263,7 +265,7 @@ export default function Home({ initialDate }: { initialDate: string }) {
 
   const fetchChart = useCallback(
     async (input: BirthInput, confirmedId: string) => {
-      const key = `${profileFingerprint(input)}|${input.readingDate}`;
+      const key = readingFingerprint(input);
       if (currentKey.current !== key || chart?.key === key) return;
       chartRequest.current?.abort();
       const controller = new AbortController();
@@ -399,7 +401,7 @@ export default function Home({ initialDate }: { initialDate: string }) {
       enhanceRequest.current = null;
       const controller = new AbortController();
       readingRequest.current = controller;
-      const key = `${profileFingerprint(input)}|${input.readingDate}`;
+      const key = readingFingerprint(input);
       setEnhancingChart(false);
       setEnhancementError(null);
       setSign(s);
@@ -437,7 +439,7 @@ export default function Home({ initialDate }: { initialDate: string }) {
         setDetailsOpen(false);
         setWelcome(false);
         readingChart.current =
-          data.birthChart?.contextId ??
+          data.birthChart?.contextId ?? data.meta?.astrology?.contextId ??
           (chart?.key === key ? chart.context.id : readingChart.current);
         if (data.meta?.astrology?.usage) setUsage(data.meta.astrology.usage);
       } catch (err) {
@@ -577,7 +579,7 @@ export default function Home({ initialDate }: { initialDate: string }) {
     setWorkspace(next);
   };
   const blocked =
-    welcome || detailsOpen || voiceOpen || tourOpen || howItWorksOpen;
+    !introComplete || welcome || detailsOpen || voiceOpen || tourOpen || howItWorksOpen;
   return (
     <main
       data-theme={theme}
@@ -867,7 +869,8 @@ export default function Home({ initialDate }: { initialDate: string }) {
         </nav>
         <PlanetTooltip planet={hoveredPlanet} sign={tooltipSign} />
       </div>
-      {welcome && (
+      <AeonPreloader ready={themeReady} onComplete={() => setIntroComplete(true)} />
+      {welcome && introComplete && (
         <WelcomeScreen
           theme={theme}
           onToggleTheme={toggleTheme}
@@ -915,7 +918,7 @@ export default function Home({ initialDate }: { initialDate: string }) {
         selectedFeature={zeusSource === "chart" ? selectedFeature : null}
         theme={theme}
         profileId={zeusSource === "reading" ? reading?.meta?.profileId : profileId}
-        contextId={zeusSource === "reading" ? reading?.birthChart?.contextId ?? readingChart.current : currentChart?.id}
+        contextId={zeusSource === "reading" ? reading?.birthChart?.contextId ?? reading?.meta?.astrology?.contextId ?? readingChart.current : currentChart?.id}
         onUsageRefresh={refreshUsage}
         open={voiceOpen}
         onOpen={() => navigate("zeus")}

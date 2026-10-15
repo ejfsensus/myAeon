@@ -440,38 +440,11 @@ body {
 .aeon-preloader {
   position: fixed;
   inset: 0;
-  z-index: 80;
+  z-index: 100;
   display: grid;
   place-items: center;
   overflow: hidden;
-  isolation: isolate;
-  background:
-    radial-gradient(
-      circle at 50% 43%,
-      rgba(212, 164, 55, 0.18),
-      transparent 23rem
-    ),
-    radial-gradient(
-      circle at 50% 58%,
-      rgba(127, 234, 255, 0.11),
-      transparent 28rem
-    ),
-    var(--app-bg);
-}
-
-:root[data-theme="light"] .aeon-preloader {
-  background:
-    radial-gradient(
-      circle at 50% 42%,
-      rgba(255, 255, 255, 0.78),
-      transparent 18rem
-    ),
-    radial-gradient(
-      circle at 50% 58%,
-      rgba(157, 104, 24, 0.13),
-      transparent 27rem
-    ),
-    var(--app-bg);
+  background: #050b20;
 }
 
 .aeon-preloader-stars {
@@ -565,9 +538,7 @@ body {
   filter: drop-shadow(0 0.7rem 1.6rem rgba(0, 0, 0, 0.18));
 }
 
-:root[data-theme="light"] .aeon-preloader-wordmark {
-  filter: drop-shadow(0 0.65rem 1.5rem rgba(106, 74, 21, 0.1));
-}
+
 
 .aeon-preloader-line {
   width: min(12rem, 44vw);

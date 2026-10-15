@@ -2,7 +2,8 @@ import { saveArtifact } from "../../../../server/reading-artifacts.mjs";
 import { randomUUID } from "node:crypto";
 import { NextResponse } from "next/server";
 import { sameRequestOrigin } from "@/lib/serverRequest";
-import { getSunSign, ZODIAC_SIGNS } from "@/lib/zodiac";
+import { longitudeToSign, ZODIAC_SIGNS } from "@/lib/zodiac";
+import { birthSunFoundation } from "../../../../server/reading-synthesis.mjs";
 import {
   ReadingInputSchema, SYSTEM_PROMPT, TODAY_SYSTEM_PROMPT, buildUserPrompt, generatedReading,
   readingModelConfig, requestReadingJson, signedReadingAudio,
@@ -37,17 +38,21 @@ export async function POST(req: Request) {
     const selectedDate = input.readingDate || new Intl.DateTimeFormat("en-CA", {
       timeZone: LONDON.timezone, year: "numeric", month: "2-digit", day: "2-digit",
     }).format(new Date());
-    // Chart generation is an independent request, even when a profile is supplied.
-    const context = await astrology.prepare(owner, undefined, selectedDate, input.mode === "full", req.signal);
+    // Personal calculations are part of the normal reading, without another
+    // generation or a separate action the reader has to discover.
+    const context = await astrology.prepare(owner, input.profileId, selectedDate, input.mode === "full", req.signal);
+    context.sunFoundation ||= birthSunFoundation(input.birthDate, profile, context);
+    if (context.sunFoundation.signs.length > 1) context.limitations.push(`Birth time is needed to distinguish the Sun signs ${context.sunFoundation.signs.join(' and ')} on this birth date.`);
     const calculated = performance.now();
-    const sunSign = getSunSign(new Date(`${input.birthDate}T12:00:00Z`));
+    const baseSign = longitudeToSign(context.sunFoundation.longitude);
+    const sunSign = context.sunFoundation.signs.length > 1 ? { ...baseSign, id: 'uncertain', name: context.sunFoundation.signs.join(' / '), glyph: '☉' } : baseSign;
     const { json, config } = await requestReadingJson(input.mode === "today" ? TODAY_SYSTEM_PROMPT : SYSTEM_PROMPT, buildUserPrompt(input, sunSign.name, context), req.signal, undefined, input.mode === "today" ? 2400 : 12288);
     const generated = performance.now();
     const response = {
       ...generatedReading(json, sunSign, context, input.mode),
       id: randomUUID(), version: 1,
       meta: {
-        timezone: "Europe/London", schemaVersion: 2,
+        timezone: "Europe/London", schemaVersion: 3, preferences: input.preferences,
         provider: "deepseek", model: config.model, endpoint: config.url, endpointMode: config.mode,
         generatedAt: new Date().toISOString(), readingDate: context.selectedDate,
         profileId: input.profileId, birthDate: profile?.birthDate ?? input.birthDate,

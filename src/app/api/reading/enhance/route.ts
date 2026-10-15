@@ -41,7 +41,7 @@ export async function POST(req: Request) {
       meta: {
         provider: "deepseek", model: config.model, endpoint: config.url, endpointMode: config.mode,
         generatedAt: new Date().toISOString(), readingDate: context.selectedDate,
-        profileId: context.profileId, birthDate: profile.birthDate, birthTime: profile.birthTime,
+        preferences: input.reading?.meta?.preferences, profileId: context.profileId, birthDate: profile.birthDate, birthTime: profile.birthTime,
         birthPlace: `${profile.location.city}, ${profile.location.nation}`, astrology: contextMetadata(context),
       },
     };
