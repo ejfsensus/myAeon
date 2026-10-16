@@ -138,3 +138,9 @@ Set `DEEPSEEK_API_KEY` and **`DEEPSEEK_MODEL=deepseek-v4-pro`** on the server. T
 Zeus's separately managed Deepgram voice-agent thinking provider remains its existing `claude-sonnet-4-6` configuration; this feature changes neither speech recognition nor narration.
 
 Plan: [docs/birth-profile-implementation-plan.md](docs/birth-profile-implementation-plan.md). Verification and delivery notes: [docs/birth-profile-verification.md](docs/birth-profile-verification.md).
+
+### Birth-profile completion repair
+
+If an older deployment returns `The birth profile was incomplete` after an otherwise successful model request, deploy this updated build. Profile validation now separates completeness from editorial length/count targets, preserves valid generated text and references, and reports structural failure details privately in runtime logs. See [chart-profile-completion-fix.md](docs/chart-profile-completion-fix.md) for the confirmed production reproduction and verification limits.
+
+Live-provider verification and deployment check: [birth-profile-live-verification.md](docs/birth-profile-live-verification.md). After deploying the repaired source, `GET /api/astrology/natal-profile` must report `release: "birth-profile-completion-v2"`. A restart of an unchanged deployment does not apply the repair.

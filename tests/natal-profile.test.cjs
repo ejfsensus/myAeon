@@ -47,6 +47,15 @@ async function fixture(t, options = {}) {
     if (options.failure) throw new Error('PRIVATE_UPSTREAM_CREDENTIAL');
     const evidence = JSON.parse(lastBody.messages[1].content).natalEvidence;
     const result = output(evidence, options.long);
+    if (options.editorialVariation) {
+      result.overview = 'A concise overview of the verified natal patterns.';
+      result.sections.personality.body = 'A concise but complete reflection on the supplied placements.';
+      result.sections.personality.evidenceIds = evidence.slice(0, 8).map(item => item.id);
+      result.reflections.push('What feels useful?', 'What would you change?', 'Where would you start?', 'What might you learn?');
+      result.sections.synthesis = result.synthesis;
+      result.sections.reflections = result.reflections;
+      delete result.synthesis; delete result.reflections;
+    }
     if (options.invalidEvidence) result.sections.personality.evidenceIds = ['forged:aspect'];
     if (options.incomplete) delete result.sections.communication;
     return Response.json({ choices: [{ finish_reason: options.truncated ? 'length' : 'tool_calls', message: { tool_calls: [{ type: 'function', function: { name: 'emit_chart_reading', arguments: JSON.stringify(result) } }] } }] });
@@ -143,4 +152,76 @@ test('standalone PDF uses immutable owner-scoped report after context expiry, ne
   assert.equal((await pdfRoute.POST(request({ reportId: report.id }))).status, 409);
   assert.equal((await pdfRoute.POST(request({ reportId: report.id, report: { overview: 'FORGED' } }, f.identity.cookie))).status, 400);
   if (process.env.AEON_NATAL_TEST_PDF) fs.writeFileSync(process.env.AEON_NATAL_TEST_PDF, bytes);
+});
+
+test('complete model prose survives editorial length and count differences', async t => {
+  const f = await fixture(t);
+  const evidence = lib.natalEvidence(f.context);
+  const raw = output(evidence);
+  raw.overview = 'A concise overview of the verified natal patterns.';
+  raw.synthesis = 'Together, these themes offer a practical reflection.';
+  raw.reflections = ['What fits?', 'What differs?', 'What needs care?', 'What restores you?', 'What could change?', 'What feels useful?', 'What is next?'];
+  raw.sections.personality.evidenceIds = [...evidence.slice(0, 8).map(item => item.id), evidence[0].id];
+  raw.sections.personality.body = 'A concise but complete reflection on the supplied placements.';
+  raw.sections.personality.title = 'An extra display heading';
+  const accepted = lib.acceptNatalOutput(raw, evidence);
+  assert.equal(accepted.overview, raw.overview);
+  assert.equal(accepted.sections[0].body, raw.sections.personality.body);
+  assert.equal(accepted.sections[0].evidence.length, 8);
+  assert.equal(accepted.reflections.length, 7);
+  assert.equal(accepted.sections.length, 8);
+});
+
+test('long tool output with trailing root fields nested in sections retains the generated text', async t => {
+  const f = await fixture(t), evidence = lib.natalEvidence(f.context), raw = output(evidence);
+  const expectedSynthesis = raw.synthesis, expectedReflections = raw.reflections;
+  raw.sections.synthesis = raw.synthesis; raw.sections.reflections = raw.reflections;
+  delete raw.synthesis; delete raw.reflections;
+  const accepted = lib.acceptNatalOutput(raw, evidence);
+  assert.equal(accepted.synthesis, expectedSynthesis);
+  assert.deepEqual(accepted.reflections, expectedReflections);
+  assert.equal(accepted.sections.length, 8);
+});
+
+test('missing prose remains a failure and diagnostics contain field paths without personal/model text', async t => {
+  const f = await fixture(t), evidence = lib.natalEvidence(f.context), raw = output(evidence);
+  const originalWarn = console.warn, warnings = [];
+  console.warn = (...args) => warnings.push(args);
+  t.after(() => { console.warn = originalWarn; });
+  raw.title = 'PRIVATE_GENERATED_TEXT';
+  delete raw.sections.communication;
+  assert.throws(() => lib.acceptNatalOutput(raw, evidence), /missing required analysis/);
+  assert.match(JSON.stringify(warnings), /sections.communication/);
+  assert.ok(!JSON.stringify(warnings).includes('PRIVATE_GENERATED_TEXT'));
+  raw.sections.communication = { body: '   ', evidenceIds: [evidence[0].id] };
+  assert.throws(() => lib.acceptNatalOutput(raw, evidence));
+  assert.match(JSON.stringify(warnings), /sections.communication.body/);
+});
+
+
+test('endpoint and PDF complete for accepted editorial variations without a second LLM call', async t => {
+  const f = await fixture(t, { editorialVariation: true });
+  const response = await route.POST(request({ contextId: f.context.id, depth: 'deep' }, f.identity.cookie));
+  assert.equal(response.status, 200, await response.clone().text());
+  const { report } = await response.json();
+  assert.equal(report.sections.length, 8); assert.equal(report.sections[0].evidence.length, 8);
+  assert.equal(report.reflections.length, 7); assert.match(report.synthesis, /FINAL_SYNTHESIS_SENTENCE/);
+  const exported = await pdfRoute.POST(request({ reportId: report.id }, f.identity.cookie));
+  assert.equal(exported.status, 200); assert.equal(exported.headers.get('content-type'), 'application/pdf');
+  assert.equal(f.calls, 1);
+});
+
+
+test('read-only deployment check identifies the repaired profile build without exposing credentials', async t => {
+  const f = await fixture(t);
+  const response = await route.GET();
+  assert.equal(response.status, 200);
+  const health = await response.json();
+  assert.equal(health.release, 'birth-profile-completion-v2');
+  assert.equal(health.model, 'deepseek-v4-pro');
+  assert.deepEqual(health.depths, ['standard', 'deep']);
+  assert.equal(health.supportsPdf, true);
+  assert.ok(!JSON.stringify(health).includes('synthetic-key'));
+  assert.equal(f.calls, 0);
+  assert.equal(response.headers.get('cache-control'), 'private, no-store');
 });

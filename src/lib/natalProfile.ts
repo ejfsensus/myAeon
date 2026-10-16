@@ -2,7 +2,7 @@ import { z } from "zod";
 import type { AstrologyContext, BirthProfile } from "./astrologyTypes";
 import { ReadingGenerationError } from "./readingGeneration";
 
-export const NATAL_PROMPT_VERSION = "1";
+export const NATAL_PROMPT_VERSION = "2";
 export const NATAL_TOPICS = {
   personality: "Personality & identity",
   interests: "Interests & learning",
@@ -39,14 +39,35 @@ export function natalEvidence(context: AstrologyContext): NatalEvidence[] {
   return evidence;
 }
 
-const body = z.string().trim().min(80).max(6500);
-const section = z.object({ body, evidenceIds: z.array(z.string().max(100)).min(1).max(6) }).strict();
+// The upstream schema describes types/required keys, but does not
+// enforce the editorial word targets. Rejecting a short, non-empty overview or
+// an extra valid reference discarded otherwise complete, paid generations.
+const body = z.string().trim().min(1).max(12_000);
+const section = z.object({ body, evidenceIds: z.array(z.string().trim().min(1).max(100)).min(1).max(256) });
 const shape = Object.fromEntries(Object.keys(NATAL_TOPICS).map(key => [key, section]));
 const OutputSchema = z.object({
-  title: z.string().trim().min(1).max(160), overview: body,
-  sections: z.object(shape).strict(), synthesis: body,
-  reflections: z.array(z.string().trim().min(10).max(500)).min(3).max(6),
-}).strict();
+  title: z.string().trim().min(1).max(500), overview: body,
+  sections: z.object(shape), synthesis: body,
+  reflections: z.array(z.string().trim().min(1).max(2000)).min(1).max(32),
+});
+
+/** Recover existing text only; missing analysis or evidence is never invented. */
+export function normalizeNatalOutput(raw: unknown) {
+  if (!raw || typeof raw !== "object" || Array.isArray(raw)) return raw;
+  const result = raw as Record<string, unknown>;
+  const candidate = result.sections;
+  const sections = candidate && typeof candidate === "object" && !Array.isArray(candidate)
+    ? candidate as Record<string, unknown> : undefined;
+  return {
+    ...result,
+    // Long tool arguments can put trailing fields inside sections. These are
+    // already-generated root fields, as in the existing enhancement normalizer.
+    synthesis: result.synthesis ?? sections?.synthesis,
+    reflections: result.reflections ?? sections?.reflections,
+    sections: sections ? Object.fromEntries(Object.keys(NATAL_TOPICS).map(key => [key, sections[key]])) : candidate,
+  };
+}
+
 const object = (properties: Record<string, unknown>) => ({ type: "object", properties, required: Object.keys(properties), additionalProperties: false });
 const text = { type: "string" };
 export function natalResponseSchema(evidence: NatalEvidence[]) {
@@ -86,12 +107,21 @@ export function natalPrompt(context: AstrologyContext, profile: BirthProfile, ev
 }
 
 export function acceptNatalOutput(raw: unknown, evidence: NatalEvidence[]) {
-  const parsed = OutputSchema.safeParse(raw);
-  if (!parsed.success) throw new ReadingGenerationError("The birth profile was incomplete. Please try again.");
+  const parsed = OutputSchema.safeParse(normalizeNatalOutput(raw));
+  if (!parsed.success) {
+    // Deliberately omit values, prompts, birth details and generated prose.
+    console.warn("[natal-profile] output_rejected", {
+      issues: parsed.error.issues.map(issue => ({ field: issue.path.join("."), code: issue.code })),
+    });
+    throw new ReadingGenerationError("The profile response was missing required analysis. Please try again.");
+  }
   const index = new Map(evidence.map(item => [item.id, item]));
   const sections = Object.entries(NATAL_TOPICS).map(([key, title]) => {
     const item = parsed.data.sections[key];
-    if (item.evidenceIds.some(id => !index.has(id))) throw new ReadingGenerationError("The birth profile could not be matched to your chart. Please try again.");
+    if (item.evidenceIds.some(id => !index.has(id))) {
+      console.warn("[natal-profile] evidence_rejected", { section: key, referenceCount: item.evidenceIds.length });
+      throw new ReadingGenerationError("The birth profile could not be matched to your chart. Please try again.");
+    }
     return { key, title, body: item.body, evidence: [...new Set(item.evidenceIds)].map(id => index.get(id)!) };
   });
   return { ...parsed.data, sections };

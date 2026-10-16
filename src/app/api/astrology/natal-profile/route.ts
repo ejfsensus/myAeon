@@ -55,3 +55,18 @@ export async function POST(req: Request) {
     return NextResponse.json({ error: failure.error }, { status: failure.status, headers: privateHeaders(cookie) });
   } finally { release?.(); }
 }
+
+/** Read-only deployment check: no chart details or credentials are returned. */
+export async function GET() {
+  const config = readingModelConfig();
+  return NextResponse.json({
+    service: "aeon-natal-profile",
+    release: "birth-profile-completion-v2",
+    promptVersion: NATAL_PROMPT_VERSION,
+    model: config.model,
+    timeoutMs: config.timeoutMs,
+    configured: config.configured,
+    depths: ["standard", "deep"],
+    supportsPdf: true,
+  }, { headers: privateHeaders() });
+}

@@ -401,6 +401,7 @@ export async function requestReadingJson(system: string, prompt: string, signal?
   const config = { ...baseConfig, url: endpoint.toString(), mode: outputSchema ? "openai-chat-strict" : baseConfig.mode };
   if (!config.configured) throw new ReadingGenerationError("Readings are not configured yet. Please try again later.", 503);
   let upstream: Response;
+  let data: any;
   try {
     upstream = await fetch(config.url, {
       method: "POST",
@@ -417,14 +418,23 @@ export async function requestReadingJson(system: string, prompt: string, signal?
       }),
       signal: signal ? AbortSignal.any([signal, AbortSignal.timeout(config.timeoutMs)]) : AbortSignal.timeout(config.timeoutMs),
     });
+    if (!upstream.ok) {
+      console.warn("[reading-generation] upstream_rejected", { status: upstream.status, structured: Boolean(outputSchema) });
+      throw new ReadingGenerationError("Reading generation is temporarily unavailable. Please try again.");
+    }
+    // DeepSeek may send headers/keepalive whitespace before the final JSON.
+    // Body read failures must share the fetch timeout/error handling too.
+    data = await upstream.json();
   } catch (error) {
+    if (error instanceof ReadingGenerationError) throw error;
     const timedOut = error instanceof Error && ["TimeoutError", "AbortError"].includes(error.name);
     throw new ReadingGenerationError(timedOut ? "Reading generation took too long or was cancelled. Please try again." : "Could not generate your reading. Please try again.", timedOut ? 504 : 502);
   }
-  if (!upstream.ok) throw new ReadingGenerationError("Reading generation is temporarily unavailable. Please try again.");
-  const data = await upstream.json().catch(() => null);
   const message = data?.choices?.[0]?.message;
-  if (outputSchema && data?.choices?.[0]?.finish_reason === "length") throw new ReadingGenerationError("The chart interpretation response was cut short. Your existing reading has not changed. Please retry.");
+  if (outputSchema && data?.choices?.[0]?.finish_reason === "length") {
+    console.warn("[reading-generation] output_truncated", { tokenLimit, completionTokens: data?.usage?.completion_tokens });
+    throw new ReadingGenerationError("The chart interpretation response was cut short. Your existing reading has not changed. Please retry.");
+  }
   const call = outputSchema && message?.tool_calls?.length === 1 ? message.tool_calls[0] : null;
   const content = outputSchema ? (call?.type === "function" && call.function?.name === "emit_chart_reading" ? normalizeAssistantContent(call.function.arguments) : "") : normalizeAssistantContent(message?.content)
     || normalizeAssistantContent(message?.reasoning_content)
