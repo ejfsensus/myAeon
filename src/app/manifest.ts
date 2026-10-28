@@ -2,10 +2,12 @@ import type { MetadataRoute } from "next";
 
 export default function manifest(): MetadataRoute.Manifest {
   return {
+    id: "/",
     name: "myAeon",
     short_name: "myAeon",
     description: "A cosmic astrological guide with live planetary readings.",
-    start_url: "/",
+    start_url: "/app",
+    scope: "/",
     display: "standalone",
     background_color: "#050616",
     theme_color: "#050616",
