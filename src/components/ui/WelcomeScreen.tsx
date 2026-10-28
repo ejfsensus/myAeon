@@ -1,4 +1,5 @@
 "use client";
+import Link from "next/link";
 import type { ThemeMode } from "./types";
 export default function WelcomeScreen({
   theme,
@@ -16,12 +17,14 @@ export default function WelcomeScreen({
   return (
     <section className="welcome-screen" aria-labelledby="welcome-title">
       <header className="welcome-header">
-        <img
-          src="/brand/my-aeon-wordmark.png"
-          alt="myAeon"
-          width={1456}
-          height={449}
-        />
+        <Link href="/" aria-label="myAeon home">
+          <img
+            src="/brand/my-aeon-wordmark.png"
+            alt="myAeon"
+            width={1456}
+            height={449}
+          />
+        </Link>
         <button
           onClick={onToggleTheme}
           aria-label={`Switch to ${theme === "dark" ? "light" : "dark"} mode`}
