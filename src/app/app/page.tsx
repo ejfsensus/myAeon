@@ -1,7 +1,7 @@
 import type { Metadata } from "next";
 import Home from "../Home";
 export const metadata: Metadata = {
-  title: "Explore your sky — myAeon",
+  title: { absolute: "Explore your sky · myAeon" },
   description:
     "Open your personal cosmic workspace: readings, birth charts, planetary exploration and conversations with Zeus.",
 };
