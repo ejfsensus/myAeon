@@ -25,7 +25,7 @@ export default function AppHeader({ sunSign, currentTime, theme, onToggleTheme, 
       className="fixed top-0 left-0 right-0 z-30 flex items-start justify-between gap-3 px-4 py-3 md:items-center md:px-8 md:py-4 pointer-events-none"
     >
       <div className="flex items-center gap-3 pointer-events-auto">
-        <div>
+        <Link href="/" aria-label="myAeon home">
           <div className="hidden text-[10px] uppercase tracking-[0.4em] text-astral-cyan/70 sm:block">
             Cosmic Astrological Guide
           </div>
@@ -38,7 +38,7 @@ export default function AppHeader({ sunSign, currentTime, theme, onToggleTheme, 
             sizes="(max-width: 640px) 7.5rem, 9.5rem"
             priority
           />
-        </div>
+        </Link>
       </div>
 
       <div className="flex items-center gap-2 pointer-events-auto md:gap-5">

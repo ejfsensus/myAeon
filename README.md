@@ -7,6 +7,16 @@ is a reflective practice, not deterministic prediction.
 
 ## Experience
 
+The public homepage at `/` introduces the experience with a decorative 3D
+orrery, interactive reading examples, birth-chart and Zeus features, FAQs and
+the full user guide. All entry links lead to the existing start screen at
+`/app`. Installed apps launch directly at `/app`; the application wordmark
+returns to the homepage. Both routes share the saved light/dark preference.
+
+The landing scene loads separately from the page, honours reduced motion and
+pauses when offscreen or hidden. A CSS illustration remains available when
+WebGL is unavailable. Its solar system and sample reading are illustrative.
+
 - Live or selected-date solar system, flat/3D views and planet insights.
 - Locally calculated natal and transit wheels, rendered as SVG textures in 3D.
 - Birth date, time, time confidence, confirmed coordinates and IANA timezone.
