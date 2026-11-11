@@ -1,0 +1,23 @@
+# myAeon
+
+> myAeon is a reflective astrology web app from the Acuity Institute (https://acuity.institute), founded by Ethan James Farrell (UK). It treats astrology as a symbolic lens for reflection, not prediction. It offers personal AI-generated readings, natal and transit chart wheels, an interactive flat and 3D solar system, narrated listening and conversations with Zeus.
+
+Key facts:
+- Readings: bring your birth details and a sky date; myAeon turns planetary context into a personal AI-generated reflection across love, purpose, body and inner world, for today, the next three days, a week or a month. Read it, listen to the narration, or download a designed PDF.
+- Birth charts: natal and transit wheels, plus independent Standard and Deep birth profiles with their own PDF. Charts are calculated on the myAeon server (Kerykeion). A full natal wheel needs a known, recorded birth time; estimated or unknown times give limited placements and never an invented chart.
+- Solar system: an interactive solar system with flat and 3D views; pick a planet or another date.
+- Zeus: a voice or text conversation about your selected sky, your reading and the calculated chart facts in your session.
+- No account is needed. Server-held profiles and reports are temporary. Microphone access starts only when you begin a conversation.
+- Readings are AI-generated reflections, not guaranteed predictions or professional advice.
+- Privacy contact: data@acuity.institute
+
+## Pages
+- [Home](https://myaeon.acuity.institute/): overview of readings, birth charts, the solar system, Zeus and FAQ.
+- [App](https://myaeon.acuity.institute/app): the personal cosmic workspace.
+- [Privacy policy](https://myaeon.acuity.institute/privacy)
+
+## Related
+- [Acuity Institute](https://acuity.institute/): parent project and open wisdom library.
+- [LumenNous](https://lumennous.acuity.institute/): contemplative prayer, practice and celestial reflection app from the same Institute.
+
+Sitemap: https://myaeon.acuity.institute/sitemap.xml

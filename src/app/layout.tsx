@@ -1,6 +1,7 @@
 import type { Metadata, Viewport } from "next";
 import localFont from "next/font/local";
 import "./globals.css";
+import { OG_IMAGE, SITE_NAME, SITE_URL } from "@/lib/seo/site";
 
 const geistSans = localFont({
   src: "./fonts/GeistVF.woff",
@@ -14,10 +15,26 @@ const geistMono = localFont({
 });
 
 export const metadata: Metadata = {
-  title: "Aeon — Cosmic Astrological Guide",
+  metadataBase: new URL(SITE_URL),
+  title: {
+    default: "myAeon · Personal Astrology Readings & Birth Charts",
+    template: "%s · myAeon",
+  },
   description:
-    "A premium celestial interface that maps the stars and renders AI-powered astrological readings.",
-  keywords: ["astrology", "zodiac", "celestial", "AI", "readings"],
+    "myAeon is a reflective astrology app: personal AI-generated readings, natal and transit charts, an interactive 3D solar system and conversations with Zeus.",
+  keywords: ["astrology", "birth chart", "natal chart", "astrology reading", "solar system", "zodiac"],
+  /* Self-referencing canonical for every route; pages may override. */
+  alternates: { canonical: "./" },
+  openGraph: {
+    type: "website",
+    siteName: SITE_NAME,
+    locale: "en_GB",
+    images: [OG_IMAGE],
+  },
+  twitter: {
+    card: "summary_large_image",
+    images: [OG_IMAGE.url],
+  },
   applicationName: "myAeon",
   appleWebApp: {
     capable: true,
@@ -54,7 +71,7 @@ export default function RootLayout({
   children: React.ReactNode;
 }>) {
   return (
-    <html lang="en" className="dark">
+    <html lang="en-GB" className="dark">
       <body
         className={`${geistSans.variable} ${geistMono.variable} antialiased bg-astral-deep text-white`}
       >
